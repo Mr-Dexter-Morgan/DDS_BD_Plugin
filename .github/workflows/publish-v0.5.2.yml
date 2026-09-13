@@ -1,0 +1,46 @@
+name: Publish DDS v0.5.2 release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.5.2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish GitHub Release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: |
+            DDS v0.5.2 is the current verified stable milestone of the BetterDiscord capture plugin.
+
+            Highlights:
+            - BetterDiscord-compatible local Disk Export
+            - Channel and forum-thread awareness
+            - Structured JSON capture of client-loaded messages
+            - ID-addressed local storage under DDS_Data
+            - Metadata capture for attachments, embeds, and message references
+            - Live-validated on Windows with Discord Desktop + BetterDiscord
+
+            Download DDS.plugin.js below and place it in your BetterDiscord Plugins folder.
+
+            See CHANGELOG.md and RELEASES.md in the repository for the full history and validation notes.
+        run: |
+          if gh release view v0.5.2 >/dev/null 2>&1; then
+            echo "Release v0.5.2 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.5.2 DDS.plugin.js \
+            --target "$GITHUB_SHA" \
+            --title "DDS v0.5.2 — Verified Stable" \
+            --notes "$RELEASE_NOTES"
