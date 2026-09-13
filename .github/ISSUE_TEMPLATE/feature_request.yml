@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a focused improvement for the DDS BetterDiscord Plugin
+title: "[Feature]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        DDS Plugin is intentionally the thin Discord-facing capture layer. Heavy storage, search, media caching, sync, and desktop UI normally belong in DDS Companion.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What concrete problem should this change solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Does this require direct Discord client access?
+      options:
+        - Yes — it belongs in the BetterDiscord capture layer
+        - No — it may belong in DDS Companion instead
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context

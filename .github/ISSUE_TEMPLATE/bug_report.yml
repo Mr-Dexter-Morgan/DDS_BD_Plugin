@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible DDS BetterDiscord Plugin problem
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a DDS bug. Do not paste Discord tokens, passwords, private messages, or unsanitized personal data.
+
+  - type: input
+    id: version
+    attributes:
+      label: DDS Plugin version
+      placeholder: 0.5.2
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, Discord channel/build if known, and BetterDiscord version if known.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Switch to ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove IDs/content that should not be public. Never include credentials or tokens.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, tokens, passwords, and private Discord content from this report.
+          required: true
