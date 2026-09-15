@@ -10,6 +10,7 @@ This file is the authoritative status index for DDS BetterDiscord Plugin release
 
 - **VERIFIED** — passed the intended live test for that release scope.
 - **VERIFIED / STABLE MILESTONE** — live-verified and considered a stable architectural milestone.
+- **CANDIDATE / AWAITING LIVE VALIDATION** — code and automated checks exist, but the release must not be recommended/published as stable yet.
 - **SUPERSEDED** — historically valid for its original scope but replaced by a later release.
 - **BROKEN** — contains a confirmed runtime defect and must not be recommended for normal use.
 
@@ -25,12 +26,25 @@ This file is the authoritative status index for DDS BetterDiscord Plugin release
 | `0.5.0` | 2026-09-13 | **BROKEN** | First Disk Export implementation; BetterDiscord renderer runtime failed around `require("os")`. |
 | `0.5.1` | 2026-09-13 | **BROKEN** | Export-root hotfix; subsequent live testing showed BetterDiscord's fs polyfill lacked `openSync()`. |
 | `0.5.2` | 2026-09-13 | **VERIFIED / STABLE MILESTONE** | BetterDiscord-compatible Disk Export live verified on Windows; current recommended plugin release. |
+| `0.5.3` | pending live test | **CANDIDATE / AWAITING LIVE VALIDATION** | Adds `plugin-heartbeat-v1` for truthful Companion health: immediate/periodic RUNNING heartbeat and clean STOPPED marker. Capture semantics unchanged. |
 
 ## Current recommended release
 
 **`0.5.2`**
 
-Use this version for normal development and live testing until a newer release explicitly earns a VERIFIED status.
+Use this version for normal development and live testing until 0.5.3 explicitly earns VERIFIED status.
+
+## Current candidate
+
+**`0.5.3` — Plugin Heartbeat v1**
+
+Candidate rules:
+
+1. Keep 0.5.2 as stable/recommended during testing.
+2. Test 0.5.3 in real BetterDiscord together with DDS Companion 0.4.4.
+3. Verify enable -> RUNNING heartbeat, disable -> STOPPED, re-enable -> recovery.
+4. Verify ordinary Structured Capture / Disk Export still works.
+5. Only after live validation: merge/promote and create a GitHub Release.
 
 ## Release policy
 
@@ -40,12 +54,13 @@ Use this version for normal development and live testing until a newer release e
 4. Broken releases remain documented for traceability.
 5. Runtime fixes are shipped as new patch releases rather than rewriting history.
 6. The BetterDiscord plugin remains the thin Discord-facing capture layer.
-7. Heavy storage, media, search, sync, and UI concerns belong to DDS Companion.
-8. Changes that alter capture/storage schemas must be documented explicitly.
+7. Heavy storage, media, search, sync and UI concerns belong to DDS Companion.
+8. Changes that alter capture/storage/health contracts must be documented explicitly.
+9. **Every plugin code change bumps the plugin version, is documented in GitHub, is tested, and receives its own GitHub Release only after successful live validation.**
 
 ## Stable storage milestone
 
-`0.5.2` is the first release where DDS's BetterDiscord capture layer reached a verified persistent local-storage milestone.
+`0.5.2` remains the first verified persistent local-storage milestone.
 
 Verified Windows storage root:
 
@@ -53,4 +68,4 @@ Verified Windows storage root:
 %APPDATA%\BetterDiscord\DDS_Data
 ```
 
-Media remains metadata-only at this milestone. Attachment and embed metadata/URLs are preserved, but binary media is not downloaded by the plugin.
+Media remains metadata-only. Attachment and embed metadata/URLs are preserved, but binary media is not downloaded by the plugin.
