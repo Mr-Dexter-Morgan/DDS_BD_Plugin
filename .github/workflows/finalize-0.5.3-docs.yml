@@ -21,8 +21,10 @@ jobs:
           fetch-depth: 0
 
       - name: Promote release documentation
-        shell: python
+        shell: bash
         run: |
+          set -euo pipefail
+          python - <<'PY'
           from pathlib import Path
 
           def replace_exact(path, old, new):
@@ -32,7 +34,6 @@ jobs:
                   raise SystemExit(f'Expected text not found in {path}: {old!r}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # CHANGELOG.md
           replace_exact('CHANGELOG.md', '## [0.5.3] — candidate', '## [0.5.3] — 2026-09-16')
           replace_exact('CHANGELOG.md', '**Status: CANDIDATE / AWAITING LIVE VALIDATION**', '**Status: VERIFIED / LIVE TESTED**')
           replace_exact(
@@ -41,7 +42,6 @@ jobs:
               '**Live validation:** BetterDiscord + DDS Companion 0.4.4 confirmed RUNNING heartbeat, periodic refresh, clean STOPPED on disable, Companion `RUNNING → LIMITED`, and automatic `LIMITED → RUNNING` recovery after re-enable without restarting Companion. User marked the build LIVE TESTED / APPROVED.'
           )
 
-          # RELEASES.md
           replace_exact(
               'RELEASES.md',
               '| `0.5.2` | 2026-09-13 | **VERIFIED / STABLE MILESTONE** | BetterDiscord-compatible Disk Export live verified on Windows; current recommended plugin release. |',
@@ -79,13 +79,8 @@ Candidate rules:
 - User approval: **LIVE TESTED / APPROVED**.'''
           replace_exact('RELEASES.md', old_candidate, new_validation)
 
-          # README.md
           replace_exact('README.md', 'version-0.5.2-7b7cff', 'version-0.5.3-7b7cff')
-          replace_exact(
-              'README.md',
-              '**v0.5.2 — Disk Export / BetterDiscord filesystem compatibility**',
-              '**v0.5.3 — Plugin Heartbeat / truthful Companion health**'
-          )
+          replace_exact('README.md', '**v0.5.2 — Disk Export / BetterDiscord filesystem compatibility**', '**v0.5.3 — Plugin Heartbeat / truthful Companion health**')
           replace_exact(
               'README.md',
               'This is the current recommended plugin release. It has been live-validated on Windows with Discord Desktop + BetterDiscord.',
@@ -93,14 +88,15 @@ Candidate rules:
           )
           replace_exact(
               'README.md',
-              '- graceful compatibility with BetterDiscord\'s reduced filesystem API.',
-              '- graceful compatibility with BetterDiscord\'s reduced filesystem API;\n- local `plugin-heartbeat-v1` status for DDS Companion Health, including clean STOPPED state and automatic recovery.'
+              "- graceful compatibility with BetterDiscord's reduced filesystem API.",
+              "- graceful compatibility with BetterDiscord's reduced filesystem API;\n- local `plugin-heartbeat-v1` status for DDS Companion Health, including clean STOPPED state and automatic recovery."
           )
           replace_exact(
               'README.md',
               '| `0.5.2` | VERIFIED / STABLE MILESTONE | BetterDiscord-compatible Disk Export |',
               '| `0.5.2` | VERIFIED / STABLE MILESTONE | BetterDiscord-compatible Disk Export |\n| `0.5.3` | VERIFIED / LIVE TESTED | Plugin Heartbeat / Companion Health contract |'
           )
+          PY
 
       - name: Verify source and docs
         shell: bash
@@ -108,8 +104,8 @@ Candidate rules:
           set -euo pipefail
           grep -q '@version 0.5.3' DDS.plugin.js
           grep -q 'VERIFIED / LIVE TESTED' CHANGELOG.md
-          grep -q 'Current recommended release' RELEASES.md
-          grep -q '0.5.3' README.md
+          grep -q '\*\*`0.5.3`\*\*' RELEASES.md
+          grep -q 'version-0.5.3-7b7cff' README.md
           node --check DDS.plugin.js
           test "$(sha256sum DDS.plugin.js | awk '{print $1}')" = "59184c7dfed3644acd9cfcc0f1c228eb491d60474e877366eed70cd42f6582af"
 
