@@ -4,6 +4,23 @@ All notable DDS BetterDiscord Plugin releases are documented here.
 
 This repository was created after the first plugin milestones had already been developed and live-tested, so the early release history below was reconstructed from the project's authoritative release records and per-version changelogs.
 
+## [0.5.3] — 2026-09-16
+### Plugin heartbeat contract for DDS Companion
+
+**Status: VERIFIED / LIVE TESTED**
+
+- Added `plugin_heartbeat.json` under `DDS_Data` so DDS Companion can distinguish a live plugin from an idle or disabled plugin.
+- Writes a fresh `RUNNING` heartbeat immediately on startup and every 30 seconds while DDS remains enabled.
+- Writes an explicit `STOPPED` heartbeat during a clean BetterDiscord plugin shutdown.
+- Heartbeat payload includes schema version, plugin/version identity, state, UTC timestamp, advertised interval, and capture schema version.
+- `manifest.json` advertises the `plugin-heartbeat-v1` capability and heartbeat file/interval metadata.
+- Heartbeat writes reuse DDS's existing compatible JSON/temp-write layer and isolate write failures from the capture pipeline.
+- Repeated heartbeat write failures are log-throttled; recovery is logged once.
+- Structured Capture, Thread Awareness, Disk Export layout, capture schema v2, metadata-only media policy, and message capture semantics remain unchanged.
+- No network requests, updater behavior, media download, SQLite or Drive sync were added to the plugin.
+
+**Live validation:** BetterDiscord + DDS Companion 0.4.4 confirmed RUNNING heartbeat, periodic refresh, clean STOPPED on disable, Companion `RUNNING → LIMITED`, and automatic `LIMITED → RUNNING` recovery after re-enable without restarting Companion. User marked the build LIVE TESTED / APPROVED.
+
 ## [0.5.2] — 2026-09-13
 ### BetterDiscord filesystem compatibility hotfix
 
@@ -18,7 +35,7 @@ This repository was created after the first plugin milestones had already been d
 - Preserved ID-addressed `DDS_Data`, 1000 ms debounce, export fingerprints, Structured Capture schema v2, Thread Awareness, and metadata-only media policy.
 - No network fetching, token access, media downloading, SQLite integration, or Drive sync.
 
-Live validation later confirmed this release working on Windows + BetterDiscord and established it as the current stable plugin milestone.
+Live validation later confirmed this release working on Windows + BetterDiscord and established it as the previous stable plugin milestone.
 
 ## [0.5.1] — 2026-09-13
 ### Disk Export runtime-path hotfix

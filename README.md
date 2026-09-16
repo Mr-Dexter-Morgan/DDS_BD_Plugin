@@ -3,8 +3,8 @@
 > **DDS — Discord Data Snatcher**  
 > *Are you sure your data is secure?*
 
-[![Current version](https://img.shields.io/badge/version-0.5.2-7b7cff)](./RELEASES.md)
-[![Status](https://img.shields.io/badge/status-verified%20stable-55d6a2)](./RELEASES.md)
+[![Current version](https://img.shields.io/badge/version-0.5.3-7b7cff)](./RELEASES.md)
+[![Status](https://img.shields.io/badge/status-live%20tested-55d6a2)](./RELEASES.md)
 [![BetterDiscord](https://img.shields.io/badge/platform-BetterDiscord-5865F2)](https://betterdiscord.app/)
 [![Syntax check](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/actions/workflows/syntax-check.yml)
 
@@ -14,9 +14,9 @@ The plugin is intentionally lightweight. Storage, indexing, search, media cachin
 
 ## Current stable milestone
 
-**v0.5.2 — Disk Export / BetterDiscord filesystem compatibility**
+**v0.5.3 — Plugin Heartbeat / truthful Companion health**
 
-This is the current recommended plugin release. It has been live-validated on Windows with Discord Desktop + BetterDiscord.
+This is the current recommended plugin release. It has been live-validated on Windows with Discord Desktop + BetterDiscord and DDS Companion 0.4.4.
 
 Core capabilities:
 
@@ -29,7 +29,8 @@ Core capabilities:
 - per-target debounce and duplicate-write suppression;
 - metadata capture for attachments, embeds, and message references;
 - clean lifecycle and listener/timer cleanup;
-- graceful compatibility with BetterDiscord's reduced filesystem API.
+- graceful compatibility with BetterDiscord's reduced filesystem API;
+- local `plugin-heartbeat-v1` status for DDS Companion Health, including clean STOPPED state and automatic recovery.
 
 ## Quick installation
 
@@ -124,6 +125,7 @@ The storage layout is ID-addressed so renaming a Discord server, channel, or thr
 ```text
 DDS_Data/
 ├── manifest.json
+├── plugin_heartbeat.json
 └── guilds/
     └── <guildId>/
         ├── guild.json
@@ -138,6 +140,8 @@ DDS_Data/
 
 Human-readable names live inside JSON metadata. Filesystem paths use stable Discord numeric IDs.
 
+`plugin_heartbeat.json` is a small local health contract. DDS writes `RUNNING` immediately and refreshes it every 30 seconds while enabled; a clean plugin stop writes `STOPPED`. DDS Companion uses this to distinguish a live capture producer from a disabled/stale one.
+
 </details>
 
 <details>
@@ -151,7 +155,8 @@ The plugin **does**:
 - read messages already loaded by Discord for the current user;
 - preserve message text and structural metadata in local captures;
 - record attachment/embed metadata and URLs;
-- write capture files to local DDS storage.
+- write capture files to local DDS storage;
+- write a small local heartbeat file for DDS Companion health monitoring.
 
 The plugin **does not**:
 
@@ -178,6 +183,7 @@ The plugin **does not**:
 | `0.5.0` | BROKEN | First Disk Export attempt |
 | `0.5.1` | BROKEN | Runtime-path hotfix attempt |
 | `0.5.2` | VERIFIED / STABLE MILESTONE | BetterDiscord-compatible Disk Export |
+| `0.5.3` | VERIFIED / LIVE TESTED | Plugin Heartbeat / Companion Health contract |
 
 See [CHANGELOG.md](./CHANGELOG.md) for what changed and [RELEASES.md](./RELEASES.md) for validation status and historical failures.
 
@@ -198,7 +204,8 @@ DDS_BD_Plugin/
 ├── SECURITY.md
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── DATA_FORMAT.md
+│   ├── DATA_FORMAT.md
+│   └── PLUGIN_HEARTBEAT.md
 └── .github/
     ├── workflows/
     │   └── syntax-check.yml
@@ -218,6 +225,7 @@ DDS follows a deliberately conservative release discipline:
 6. The BetterDiscord plugin stays lightweight.
 7. Heavy storage, search, media, sync, and UI responsibilities stay in DDS Companion.
 8. A small failure must not take down the entire DDS pipeline.
+9. Every plugin code change receives a version bump, GitHub documentation, live validation, and its own GitHub Release after approval.
 
 Every push and pull request runs a JavaScript syntax check against `DDS.plugin.js`.
 
