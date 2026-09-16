@@ -2,7 +2,7 @@
  * @name DDS
  * @author Mr_Dexter_Morgan, Masya
  * @description 🌌 [Discord Data Snatcher] — Private client data collector & event grabber. For personal use only.
- * @version 0.5.2
+ * @version 0.5.3
  * @source https://localhost
  */
 
@@ -10,7 +10,7 @@ module.exports = class DDS {
     constructor() {
         this.api = new BdApi("DDS");
 
-        this.version = "0.5.2";
+        this.version = "0.5.3";
         this.captureSchemaVersion = 2;
 
         this.started = false;
@@ -18,6 +18,10 @@ module.exports = class DDS {
 
         this.locationRefreshTimer = null;
         this.messageRefreshTimer = null;
+        this.heartbeatTimer = null;
+        this.heartbeatIntervalMs = 30000;
+        this.heartbeatPath = null;
+        this.heartbeatWriteFailed = false;
 
         this.lastLocation = {
             guildId: null,
@@ -60,6 +64,7 @@ module.exports = class DDS {
             this.loadStores();
             this.logCurrentUser();
             this.initializeDiskExport();
+            this.startPluginHeartbeat();
 
             const initialLocation = this.getLocationSnapshot();
             this.lastLocation = initialLocation;
@@ -108,6 +113,7 @@ module.exports = class DDS {
 
         this.clearTimer("locationRefreshTimer");
         this.clearTimer("messageRefreshTimer");
+        this.stopPluginHeartbeat();
 
         try {
             this.flushPendingExports();
@@ -159,6 +165,84 @@ module.exports = class DDS {
         if (timer !== null) {
             clearTimeout(timer);
             this[propertyName] = null;
+        }
+    }
+
+    clearHeartbeatTimer() {
+        if (this.heartbeatTimer !== null) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+    }
+
+    startPluginHeartbeat() {
+        this.clearHeartbeatTimer();
+
+        if (!this.exportRoot || !this.path) {
+            throw new Error("Plugin Heartbeat: Disk Export ещё не инициализирован.");
+        }
+
+        this.heartbeatPath = this.path.join(
+            this.exportRoot,
+            "plugin_heartbeat.json"
+        );
+
+        this.writePluginHeartbeat("RUNNING");
+
+        this.heartbeatTimer = setInterval(() => {
+            if (!this.started) return;
+            this.writePluginHeartbeat("RUNNING");
+        }, this.heartbeatIntervalMs);
+
+        this.api.Logger.info(
+            `Plugin Heartbeat активирован: ${this.heartbeatIntervalMs / 1000} сек → ${this.heartbeatPath}`
+        );
+    }
+
+    stopPluginHeartbeat() {
+        this.clearHeartbeatTimer();
+
+        if (!this.heartbeatPath || !this.fs || !this.path) {
+            return;
+        }
+
+        this.writePluginHeartbeat("STOPPED");
+    }
+
+    writePluginHeartbeat(state = "RUNNING") {
+        if (!this.heartbeatPath || !this.fs || !this.path) {
+            return false;
+        }
+
+        const payload = {
+            schemaVersion: 1,
+            plugin: "DDS",
+            pluginVersion: this.version,
+            state: String(state || "UNKNOWN").toUpperCase(),
+            updatedAt: new Date().toISOString(),
+            heartbeatIntervalMs: this.heartbeatIntervalMs,
+            captureSchemaVersion: this.captureSchemaVersion
+        };
+
+        try {
+            this.atomicWriteJson(this.heartbeatPath, payload);
+
+            if (this.heartbeatWriteFailed) {
+                this.api.Logger.info("Plugin Heartbeat: запись восстановлена.");
+            }
+
+            this.heartbeatWriteFailed = false;
+            return true;
+        } catch (error) {
+            if (!this.heartbeatWriteFailed) {
+                this.api.Logger.warn(
+                    "Plugin Heartbeat: не удалось обновить heartbeat-файл.",
+                    error
+                );
+            }
+
+            this.heartbeatWriteFailed = true;
+            return false;
         }
     }
 
@@ -733,6 +817,12 @@ module.exports = class DDS {
             storageSchemaVersion: this.storageSchemaVersion,
             captureSchemaVersion: this.captureSchemaVersion,
             ddsVersion: this.version,
+            capabilities: ["plugin-heartbeat-v1"],
+            pluginHeartbeat: {
+                schemaVersion: 1,
+                file: "plugin_heartbeat.json",
+                intervalMs: this.heartbeatIntervalMs
+            },
             format: "dds-json",
             layout: "id-addressed",
             mediaPolicy: "metadata-only",
@@ -981,6 +1071,12 @@ module.exports = class DDS {
                 storageSchemaVersion: this.storageSchemaVersion,
                 captureSchemaVersion: this.captureSchemaVersion,
                 ddsVersion: this.version,
+                capabilities: ["plugin-heartbeat-v1"],
+                pluginHeartbeat: {
+                    schemaVersion: 1,
+                    file: "plugin_heartbeat.json",
+                    intervalMs: this.heartbeatIntervalMs
+                },
                 format: "dds-json",
                 layout: "id-addressed",
                 mediaPolicy: "metadata-only",
