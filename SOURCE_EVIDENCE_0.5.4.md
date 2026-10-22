@@ -108,3 +108,15 @@ For unsupported string wrappers, diagnostics now expose only total length, the n
 character codes of at most the first 12 characters, and the first structural JSON
 marker offset. No response characters or audit values are logged. This is used only
 to identify transport prefixes safely.
+
+
+### Root cause confirmed: generic superagent selected instead of Discord RestAPI
+
+The live adapter previously resolved an object exposing
+get/post/put/patch/del/delete and returned an HTML document for the relative
+/guilds/.../audit-logs route. Current Vencord resolves Discord's authenticated
+RestAPI from an object exposing del + put and uses relative Discord Endpoints.
+
+The r1 resolver now rejects superagent-style candidates exposing delete aliases or
+Request/Response/agent helpers and accepts the Discord RestAPI-shaped object with
+get + put + del. The audit request contract itself remains unchanged.
