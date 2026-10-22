@@ -44,3 +44,26 @@ Official protocol/API references:
 https://docs.discord.com/developers/resources/audit-log
 https://docs.discord.com/developers/resources/channel#channel-object-channel-types
 https://docs.betterdiscord.app/api/webpack
+
+
+## 0.5.4-r1 live diagnostic/fix pass
+
+A real Windows/Discord test on 2026-10-22 captured a fresh GUILD_VOICE source
+(channel 1562825560596684890) and cached its attachment, then deleted the channel and
+restarted Plugin 0.5.4. Capture/export/heartbeat remained healthy, but no
+source_evidence.json was written. This is a live SOURCE_GONE gate failure, not a
+general Plugin failure.
+
+r1 keeps the positive-proof contract unchanged and adds:
+- explicit candidate-count diagnostics;
+- explicit HTTP-adapter FOUND / NOT FOUND diagnostics;
+- relaxed feature detection for Discord REST wrappers where the delete verb may be
+  exposed as del or delete, without accepting arbitrary get-only modules;
+- bounded audit response-shape normalization for body/data/root and
+  audit_log_entries/auditLogEntries;
+- status/shape/entry-count logging without logging audit actors, reasons, tokens,
+  headers, or response bodies;
+- explicit per-guild verified N/M result and GONE_VERIFIED write logging.
+
+No absence-only inference was added. A matching CHANNEL_DELETE (12) audit entry for
+the exact archived channel remains mandatory.

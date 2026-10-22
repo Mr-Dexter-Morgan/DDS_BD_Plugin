@@ -26,3 +26,6 @@ jobs:
 
       - name: Validate plugin syntax
         run: node --check DDS.plugin.js
+
+      - name: Run SOURCE_GONE candidate tests
+        run: node --test tests/source_evidence.test.js

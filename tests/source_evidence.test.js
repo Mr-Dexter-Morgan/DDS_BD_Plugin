@@ -7,10 +7,23 @@ const path = require('node:path');
 const GUILD = '111111111111111111', CHANNEL = '222222222222222222';
 const ENTRY = ((BigInt(Date.parse('2026-09-14T00:00:00Z')) - 1420070400000n) << 22n).toString();
 const noop = () => {};
-let modules, temp, dds, requests, loggedIn, guildAvailable, liveChannel, handlers;
+let modules, temp, dds, requests, loggedIn, guildAvailable, liveChannel, handlers, logs;
 class MockBdApi {
-    constructor() { this.Logger = {info: noop, warn: noop, error: noop}; this.UI = {showToast: noop}; this.Patcher = {unpatchAll: noop}; }
-    static Webpack = {getModule(filter) { return modules.find(filter); }};
+    constructor() {
+        this.Logger = {
+            info: (...args) => logs.push(["info", ...args]),
+            warn: (...args) => logs.push(["warn", ...args]),
+            error: (...args) => logs.push(["error", ...args])
+        };
+        this.UI = {showToast: noop};
+        this.Patcher = {unpatchAll: noop};
+    }
+    static Webpack = {getModule(filter) {
+        for (const module of modules) {
+            try { if (filter(module)) return module; } catch {}
+        }
+        return undefined;
+    }};
 }
 global.BdApi = MockBdApi;
 const DDS = require('../DDS.plugin.js');
@@ -29,7 +42,7 @@ function http(entries = [], status = 200) {
 }
 beforeEach(() => {
     temp = fs.mkdtempSync(path.join(os.tmpdir(), 'dds-source-evidence-'));
-    modules = []; requests = []; handlers = new Map(); loggedIn = true; guildAvailable = true; liveChannel = null;
+    modules = []; requests = []; handlers = new Map(); logs = []; loggedIn = true; guildAvailable = true; liveChannel = null;
     dds = new DDS(); dds.started = true; dds.exportRoot = temp; dds.fs = fs; dds.path = path;
     dds.stores.UserStore = {getCurrentUser: () => loggedIn ? {id: '999999999999999999'} : null};
     dds.stores.GuildStore = {getGuild: () => guildAvailable ? {id: GUILD} : null};
@@ -124,4 +137,46 @@ test('CHANNEL_DELETE subscription is just a hint and cleanup unsubscribes it', (
 });
 test('missing Webpack HTTP adapter leaves UNKNOWN', async () => {
     modules = []; await dds.checkArchivedSourceEvidence(); assert.equal(fs.existsSync(evidencePath()), false);
+});
+
+test('relaxed native HTTP feature detection accepts delete instead of del', async () => {
+    modules = [{
+        post: noop,
+        delete: noop,
+        async get(options) {
+            requests.push(options);
+            return {status: 200, body: {audit_log_entries: [auditEntry()]}};
+        }
+    }];
+    await dds.checkArchivedSourceEvidence();
+    assert.equal(JSON.parse(fs.readFileSync(evidencePath(), 'utf8')).availability, 'GONE_VERIFIED');
+    assert.equal(requests.length, 1);
+});
+
+test('audit response parser accepts direct and data-wrapped entry arrays without weakening proof', async () => {
+    for (const response of [
+        {audit_log_entries: [auditEntry()]},
+        {statusCode: 200, data: {auditLogEntries: [auditEntry()]}}
+    ]) {
+        fs.rmSync(evidencePath(), {force: true});
+        dds.sourceEvidenceRequests.clear();
+        modules = [{
+            post: noop,
+            put: noop,
+            async get(options) { requests.push(options); return response; }
+        }];
+        await dds.checkArchivedSourceEvidence();
+        assert.equal(fs.existsSync(evidencePath()), true);
+    }
+});
+
+test('live diagnostics distinguish no candidates from missing HTTP adapter', async () => {
+    liveChannel = {id: CHANNEL, type: 2};
+    await dds.checkArchivedSourceEvidence();
+    assert.equal(logs.some(row => String(row[1]).includes('no eligible archived voice/stage channels')), true);
+
+    liveChannel = null;
+    logs = [];
+    await dds.checkArchivedSourceEvidence();
+    assert.equal(logs.some(row => String(row[1]).includes('HTTP adapter NOT FOUND')), true);
 });
