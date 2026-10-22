@@ -153,10 +153,14 @@ test('relaxed native HTTP feature detection accepts delete instead of del', asyn
     assert.equal(requests.length, 1);
 });
 
-test('audit response parser accepts direct and data-wrapped entry arrays without weakening proof', async () => {
+test('audit response parser accepts current wrapper variants without weakening proof', async () => {
     for (const response of [
         {audit_log_entries: [auditEntry()]},
-        {statusCode: 200, data: {auditLogEntries: [auditEntry()]}}
+        {statusCode: 200, data: {auditLogEntries: [auditEntry()]}},
+        {status: 200, body: JSON.stringify({audit_log_entries: [auditEntry()]})},
+        {status: 200, body: {body: {audit_log_entries: [auditEntry()]}}},
+        {status: 200, response: {result: {audit_log_entries: [auditEntry()]}}},
+        {status: 200, body: {async json() { return {audit_log_entries: [auditEntry()]}; }}}
     ]) {
         fs.rmSync(evidencePath(), {force: true});
         dds.sourceEvidenceRequests.clear();
@@ -179,4 +183,16 @@ test('live diagnostics distinguish no candidates from missing HTTP adapter', asy
     logs = [];
     await dds.checkArchivedSourceEvidence();
     assert.equal(logs.some(row => String(row[1]).includes('HTTP adapter NOT FOUND')), true);
+});
+
+test('unsupported live response shape is reported without exposing response values', async () => {
+    modules = [{
+        post: noop,
+        put: noop,
+        async get() { return {status: 200, body: {mystery: {secret: 'do-not-log'}}}; }
+    }];
+    await dds.checkArchivedSourceEvidence();
+    const line = logs.map(row => String(row[1])).find(value => value.includes('unsupported'));
+    assert.equal(Boolean(line), true);
+    assert.equal(line.includes('do-not-log'), false);
 });
