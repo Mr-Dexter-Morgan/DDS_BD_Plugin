@@ -176,6 +176,7 @@ test('audit response parser accepts current wrapper variants without weakening p
         modules = [{
             post: noop,
             put: noop,
+            del: noop,
             async get(options) { requests.push(options); return response; }
         }];
         await dds.checkArchivedSourceEvidence();
@@ -198,6 +199,7 @@ test('unsupported live response shape is reported without exposing response valu
     modules = [{
         post: noop,
         put: noop,
+        del: noop,
         async get() {
             return {
                 status: 200,
