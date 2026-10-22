@@ -1,3 +1,7 @@
+> Development candidate: **DDS Plugin 0.5.4**, linked to **Companion 0.8.6**.
+> Positive channel-deletion evidence only; live Discord adapter acceptance pending.
+> See [SOURCE_EVIDENCE_0.5.4.md](SOURCE_EVIDENCE_0.5.4.md). No public release made.
+
 # DDS BetterDiscord Plugin
 
 > **DDS — Discord Data Snatcher**  
