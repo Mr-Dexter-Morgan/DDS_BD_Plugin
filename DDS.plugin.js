@@ -2,15 +2,19 @@
  * @name DDS
  * @author Mr_Dexter_Morgan, Masya
  * @description 🌌 [Discord Data Snatcher] — Private client data collector & event grabber. For personal use only.
- * @version 0.5.3
+ * @version 0.5.4
  * @source https://localhost
  */
+
+// Discord API enums: Channel Types and Audit Log Events (official API docs).
+const SOURCE_CHANNEL_TYPES = Object.freeze({GUILD_VOICE: 2, GUILD_STAGE_VOICE: 13});
+const SOURCE_AUDIT_EVENTS = Object.freeze({CHANNEL_DELETE: 12});
 
 module.exports = class DDS {
     constructor() {
         this.api = new BdApi("DDS");
 
-        this.version = "0.5.3";
+        this.version = "0.5.4";
         this.captureSchemaVersion = 2;
 
         this.started = false;
@@ -19,6 +23,9 @@ module.exports = class DDS {
         this.locationRefreshTimer = null;
         this.messageRefreshTimer = null;
         this.heartbeatTimer = null;
+        this.sourceEvidenceTimer = null;
+        this.sourceEvidenceGeneration = 0;
+        this.sourceEvidenceRequests = new Set();
         this.heartbeatIntervalMs = 30000;
         this.heartbeatPath = null;
         this.heartbeatWriteFailed = false;
@@ -65,6 +72,7 @@ module.exports = class DDS {
             this.logCurrentUser();
             this.initializeDiskExport();
             this.startPluginHeartbeat();
+            this.startSourceEvidence();
 
             const initialLocation = this.getLocationSnapshot();
             this.lastLocation = initialLocation;
@@ -114,6 +122,9 @@ module.exports = class DDS {
         this.clearTimer("locationRefreshTimer");
         this.clearTimer("messageRefreshTimer");
         this.stopPluginHeartbeat();
+        this.clearTimer("sourceEvidenceTimer");
+        this.sourceEvidenceGeneration += 1;
+        this.sourceEvidenceRequests.clear();
 
         try {
             this.flushPendingExports();
@@ -244,6 +255,120 @@ module.exports = class DDS {
             this.heartbeatWriteFailed = true;
             return false;
         }
+    }
+
+    startSourceEvidence() {
+        // At most ten guild reads per Plugin start; no polling or automatic retries.
+        // CHANNEL_DELETE is only a wake-up hint: never itself deletion proof.
+        const generation = ++this.sourceEvidenceGeneration;
+        this.sourceEvidenceRequests.clear();
+        const run = () => {
+            if (!this.started || generation !== this.sourceEvidenceGeneration) return;
+            this.sourceEvidenceTimer = null;
+            this.checkArchivedSourceEvidence(generation).catch(error => {
+                this.api.Logger.warn("Source evidence остаётся UNKNOWN:", error?.message || error);
+            });
+        };
+        const schedule = () => {
+            this.clearTimer("sourceEvidenceTimer");
+            this.sourceEvidenceTimer = setTimeout(run, 5000);
+        };
+        schedule();
+        try {
+            const dispatcher = BdApi.Webpack.getModule(m =>
+                typeof m?.subscribe === "function" && typeof m?.unsubscribe === "function" &&
+                typeof m?.dispatch === "function", {searchExports: true});
+            if (dispatcher) {
+                dispatcher.subscribe("CHANNEL_DELETE", schedule);
+                this.registerCleanup(() => dispatcher.unsubscribe("CHANNEL_DELETE", schedule));
+            }
+        } catch {
+            // Optional hint unavailable: startup check still works.
+        }
+    }
+
+    archivedSourceCandidates() {
+        const result = new Map();
+        if (!this.exportRoot || !this.fs?.readdirSync || !this.fs?.readFileSync) return result;
+        const guildRoot = this.path.join(this.exportRoot, "guilds");
+        let guildIds;
+        try { guildIds = this.fs.readdirSync(guildRoot); } catch { return result; }
+        for (const guildId of guildIds) {
+            if (!/^\d{1,20}$/.test(guildId)) continue;
+            if (!this.stores.UserStore?.getCurrentUser?.() || !this.stores.GuildStore?.getGuild?.(guildId)) continue;
+            const channelRoot = this.path.join(guildRoot, guildId, "channels");
+            let channelIds;
+            try { channelIds = this.fs.readdirSync(channelRoot); } catch { continue; }
+            for (const channelId of channelIds) {
+                if (!/^\d{1,20}$/.test(channelId)) continue;
+                // Absence only selects candidates for a positive audit lookup.
+                if (this.stores.ChannelStore?.getChannel?.(channelId)) continue;
+                try {
+                    const metadata = JSON.parse(this.fs.readFileSync(this.path.join(channelRoot, channelId, "channel.json"), "utf8"));
+                    if (metadata.id !== channelId || metadata.guildId !== guildId ||
+                        !Object.values(SOURCE_CHANNEL_TYPES).includes(metadata.type)) continue;
+                    if (!result.has(guildId)) result.set(guildId, []);
+                    result.get(guildId).push({channelId, channelType: metadata.type});
+                } catch { /* Incomplete archive metadata means UNKNOWN. */ }
+            }
+        }
+        return result;
+    }
+
+    async checkArchivedSourceEvidence(generation = this.sourceEvidenceGeneration) {
+        const candidates = this.archivedSourceCandidates();
+        if (!candidates.size || !this.started) return;
+        // Use Discord's native client HTTP API. No token extraction or external transport.
+        const http = BdApi.Webpack.getModule(m =>
+            typeof m?.get === "function" && typeof m?.post === "function" &&
+            typeof m?.put === "function" && typeof m?.del === "function" &&
+            typeof m?.patch === "function", {searchExports: true});
+        if (!http) return;
+        for (const [guildId, channels] of candidates) {
+            if (!this.started || generation !== this.sourceEvidenceGeneration) return;
+            if (this.sourceEvidenceRequests.has(guildId) || this.sourceEvidenceRequests.size >= 10) continue;
+            if (!this.stores.UserStore?.getCurrentUser?.() || !this.stores.GuildStore?.getGuild?.(guildId)) continue;
+            this.sourceEvidenceRequests.add(guildId);
+            try {
+                const response = await http.get({url: `/guilds/${guildId}/audit-logs`,
+                    query: {action_type: SOURCE_AUDIT_EVENTS.CHANNEL_DELETE, limit: 100}, retries: 0});
+                if (!this.started || generation !== this.sourceEvidenceGeneration) return;
+                if (response?.status !== 200 || !Array.isArray(response.body?.audit_log_entries)) continue;
+                for (const channel of channels) {
+                    this.persistSourceDeletionEvidence(guildId, channel, response.body.audit_log_entries);
+                }
+            } catch {
+                // 403, 404, 429, network/reconnect errors: no deletion assertion.
+                this.api.Logger.info(`Source evidence ${guildId}: UNKNOWN (audit log недоступен).`);
+            }
+        }
+    }
+
+    persistSourceDeletionEvidence(guildId, channel, entries) {
+        if (!this.started || !this.stores.UserStore?.getCurrentUser?.() ||
+            !this.stores.GuildStore?.getGuild?.(guildId) ||
+            this.stores.ChannelStore?.getChannel?.(channel.channelId)) return false;
+        if (!Object.values(SOURCE_CHANNEL_TYPES).includes(channel.channelType)) return false;
+        const entry = entries.find(item =>
+            item?.action_type === SOURCE_AUDIT_EVENTS.CHANNEL_DELETE &&
+            item?.target_id === channel.channelId && /^\d{1,20}$/.test(item?.id || "") &&
+            !(item.changes || []).some(change => change.key === "type" && change.old_value !== channel.channelType));
+        if (!entry) return false;
+        const payload = {schemaVersion: 1, availability: "GONE_VERIFIED",
+            kind: "discord-audit-log-channel-delete", guildId,
+            channelId: channel.channelId, channelType: channel.channelType,
+            observedAt: new Date().toISOString(), pluginVersion: this.version,
+            // Preserve only proof fields; do not export actors/reasons/other audit entries.
+            auditEntry: {id: entry.id, target_id: entry.target_id, action_type: entry.action_type,
+                changes: (entry.changes || []).filter(change => change.key === "type")}};
+        const target = this.path.join(this.exportRoot, "guilds", guildId, "channels", channel.channelId, "source_evidence.json");
+        // Same proof is stable; do not wake Companion on every Plugin restart.
+        try {
+            const previous = JSON.parse(this.fs.readFileSync(target, "utf8"));
+            if (previous.auditEntry?.id === entry.id) return false;
+        } catch { /* First positive proof. */ }
+        this.atomicWriteJson(target, payload);
+        return true;
     }
 
     loadStores() {
@@ -817,7 +942,7 @@ module.exports = class DDS {
             storageSchemaVersion: this.storageSchemaVersion,
             captureSchemaVersion: this.captureSchemaVersion,
             ddsVersion: this.version,
-            capabilities: ["plugin-heartbeat-v1"],
+            capabilities: ["plugin-heartbeat-v1", "source-evidence-v1"],
             pluginHeartbeat: {
                 schemaVersion: 1,
                 file: "plugin_heartbeat.json",
@@ -1071,7 +1196,7 @@ module.exports = class DDS {
                 storageSchemaVersion: this.storageSchemaVersion,
                 captureSchemaVersion: this.captureSchemaVersion,
                 ddsVersion: this.version,
-                capabilities: ["plugin-heartbeat-v1"],
+                capabilities: ["plugin-heartbeat-v1", "source-evidence-v1"],
                 pluginHeartbeat: {
                     schemaVersion: 1,
                     file: "plugin_heartbeat.json",
