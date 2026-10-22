@@ -274,6 +274,7 @@ module.exports = class DDS {
             this.sourceEvidenceTimer = setTimeout(run, 5000);
         };
         schedule();
+        this.api.Logger.info("Source evidence: startup audit check scheduled in 5s.");
         try {
             const dispatcher = BdApi.Webpack.getModule(m =>
                 typeof m?.subscribe === "function" && typeof m?.unsubscribe === "function" &&
@@ -281,9 +282,13 @@ module.exports = class DDS {
             if (dispatcher) {
                 dispatcher.subscribe("CHANNEL_DELETE", schedule);
                 this.registerCleanup(() => dispatcher.unsubscribe("CHANNEL_DELETE", schedule));
+                this.api.Logger.info("Source evidence: CHANNEL_DELETE wake-up subscription active.");
+            } else {
+                this.api.Logger.info("Source evidence: CHANNEL_DELETE dispatcher unavailable; startup check remains active.");
             }
-        } catch {
+        } catch (error) {
             // Optional hint unavailable: startup check still works.
+            this.api.Logger.info(`Source evidence: CHANNEL_DELETE dispatcher lookup failed; startup check remains active (${error?.message || error}).`);
         }
     }
 
@@ -315,31 +320,138 @@ module.exports = class DDS {
         return result;
     }
 
+    sourceEvidenceHttpCandidate(module) {
+        if (!module || typeof module.get !== "function") return false;
+        const verbs = ["post", "put", "patch", "del", "delete"]
+            .filter(name => typeof module?.[name] === "function");
+        // Avoid matching arbitrary objects with a get() method. Discord's REST wrapper
+        // has several mutation verbs, but the exact delete key has changed over time.
+        return verbs.length >= 2;
+    }
+
+    resolveSourceEvidenceHttp() {
+        const unwrap = value => {
+            const candidates = [value, value?.default, value?.HTTP, value?.http, value?.api];
+            return candidates.find(candidate => this.sourceEvidenceHttpCandidate(candidate)) || null;
+        };
+        const filters = [
+            module => this.sourceEvidenceHttpCandidate(module) &&
+                ["post", "put", "patch"].every(name => typeof module?.[name] === "function") &&
+                (typeof module?.del === "function" || typeof module?.delete === "function"),
+            module => this.sourceEvidenceHttpCandidate(module) &&
+                typeof module?.post === "function",
+            module => this.sourceEvidenceHttpCandidate(module) ||
+                this.sourceEvidenceHttpCandidate(module?.default) ||
+                this.sourceEvidenceHttpCandidate(module?.HTTP) ||
+                this.sourceEvidenceHttpCandidate(module?.http) ||
+                this.sourceEvidenceHttpCandidate(module?.api)
+        ];
+        for (const filter of filters) {
+            try {
+                const found = BdApi.Webpack.getModule(filter, {searchExports: true});
+                const resolved = unwrap(found);
+                if (resolved) return resolved;
+            } catch {
+                // Try the next, slightly broader feature filter.
+            }
+        }
+        return null;
+    }
+
+    sourceEvidenceHttpShape(http) {
+        return ["get", "post", "put", "patch", "del", "delete"]
+            .filter(name => typeof http?.[name] === "function")
+            .join(",") || "none";
+    }
+
+    parseSourceEvidenceAuditResponse(response) {
+        const explicitStatus =
+            Number.isFinite(Number(response?.status)) ? Number(response.status) :
+            Number.isFinite(Number(response?.statusCode)) ? Number(response.statusCode) :
+            null;
+        const sources = [
+            ["body", response?.body],
+            ["data", response?.data],
+            ["root", response]
+        ];
+        for (const [shape, body] of sources) {
+            if (!body || typeof body !== "object") continue;
+            const entries =
+                Array.isArray(body.audit_log_entries) ? body.audit_log_entries :
+                Array.isArray(body.auditLogEntries) ? body.auditLogEntries :
+                null;
+            if (entries) return {status: explicitStatus, entries, shape};
+        }
+        return {status: explicitStatus, entries: null, shape: "unsupported"};
+    }
+
     async checkArchivedSourceEvidence(generation = this.sourceEvidenceGeneration) {
         const candidates = this.archivedSourceCandidates();
-        if (!candidates.size || !this.started) return;
+        const candidateCount = Array.from(candidates.values())
+            .reduce((total, channels) => total + channels.length, 0);
+        this.api.Logger.info(
+            `Source evidence: scan found ${candidateCount} candidate channel(s) in ${candidates.size} guild(s).`
+        );
+        if (!candidates.size || !this.started) {
+            if (!candidates.size) {
+                this.api.Logger.info("Source evidence: no eligible archived voice/stage channels; UNKNOWN unchanged.");
+            }
+            return;
+        }
+
         // Use Discord's native client HTTP API. No token extraction or external transport.
-        const http = BdApi.Webpack.getModule(m =>
-            typeof m?.get === "function" && typeof m?.post === "function" &&
-            typeof m?.put === "function" && typeof m?.del === "function" &&
-            typeof m?.patch === "function", {searchExports: true});
-        if (!http) return;
+        const http = this.resolveSourceEvidenceHttp();
+        if (!http) {
+            this.api.Logger.warn("Source evidence: Discord native HTTP adapter NOT FOUND; UNKNOWN unchanged.");
+            return;
+        }
+        this.api.Logger.info(
+            `Source evidence: Discord native HTTP adapter FOUND [${this.sourceEvidenceHttpShape(http)}].`
+        );
+
         for (const [guildId, channels] of candidates) {
             if (!this.started || generation !== this.sourceEvidenceGeneration) return;
             if (this.sourceEvidenceRequests.has(guildId) || this.sourceEvidenceRequests.size >= 10) continue;
             if (!this.stores.UserStore?.getCurrentUser?.() || !this.stores.GuildStore?.getGuild?.(guildId)) continue;
             this.sourceEvidenceRequests.add(guildId);
+            this.api.Logger.info(
+                `Source evidence ${guildId}: requesting CHANNEL_DELETE audit page for ${channels.length} candidate(s).`
+            );
             try {
                 const response = await http.get({url: `/guilds/${guildId}/audit-logs`,
                     query: {action_type: SOURCE_AUDIT_EVENTS.CHANNEL_DELETE, limit: 100}, retries: 0});
                 if (!this.started || generation !== this.sourceEvidenceGeneration) return;
-                if (response?.status !== 200 || !Array.isArray(response.body?.audit_log_entries)) continue;
-                for (const channel of channels) {
-                    this.persistSourceDeletionEvidence(guildId, channel, response.body.audit_log_entries);
+
+                const parsed = this.parseSourceEvidenceAuditResponse(response);
+                this.api.Logger.info(
+                    `Source evidence ${guildId}: audit response status=${parsed.status ?? "n/a"}, shape=${parsed.shape}, entries=${parsed.entries?.length ?? "n/a"}.`
+                );
+                if (parsed.status !== null && parsed.status !== 200) {
+                    this.api.Logger.info(`Source evidence ${guildId}: UNKNOWN (audit HTTP ${parsed.status}).`);
+                    continue;
                 }
-            } catch {
-                // 403, 404, 429, network/reconnect errors: no deletion assertion.
-                this.api.Logger.info(`Source evidence ${guildId}: UNKNOWN (audit log недоступен).`);
+                if (!Array.isArray(parsed.entries)) {
+                    this.api.Logger.warn(
+                        `Source evidence ${guildId}: UNKNOWN (unsupported audit response shape).`
+                    );
+                    continue;
+                }
+
+                let matched = 0;
+                for (const channel of channels) {
+                    if (this.persistSourceDeletionEvidence(guildId, channel, parsed.entries)) {
+                        matched += 1;
+                    }
+                }
+                this.api.Logger.info(
+                    `Source evidence ${guildId}: verified ${matched}/${channels.length} candidate(s).`
+                );
+            } catch (error) {
+                // 403, 404, 429, network/reconnect errors or incompatible internal adapter:
+                // no deletion assertion.
+                this.api.Logger.info(
+                    `Source evidence ${guildId}: UNKNOWN (audit request failed: ${error?.message || error}).`
+                );
             }
         }
     }
@@ -368,6 +480,9 @@ module.exports = class DDS {
             if (previous.auditEntry?.id === entry.id) return false;
         } catch { /* First positive proof. */ }
         this.atomicWriteJson(target, payload);
+        this.api.Logger.info(
+            `Source evidence ${guildId}: GONE_VERIFIED channel ${channel.channelId} → ${target}`
+        );
         return true;
     }
 
