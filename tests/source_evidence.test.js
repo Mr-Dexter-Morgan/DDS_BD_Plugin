@@ -159,6 +159,7 @@ test('audit response parser accepts current wrapper variants without weakening p
         {statusCode: 200, data: {auditLogEntries: [auditEntry()]}},
         {status: 200, body: JSON.stringify({audit_log_entries: [auditEntry()]})},
         {status: 200, text: JSON.stringify({audit_log_entries: [auditEntry()]})},
+        {status: 200, text: async () => JSON.stringify({audit_log_entries: [auditEntry()]})},
         {status: 200, xhr: {responseText: JSON.stringify({auditLogEntries: [auditEntry()]})}},
         {status: 200, body: {body: {audit_log_entries: [auditEntry()]}}},
         {status: 200, response: {result: {audit_log_entries: [auditEntry()]}}},
@@ -191,10 +192,18 @@ test('unsupported live response shape is reported without exposing response valu
     modules = [{
         post: noop,
         put: noop,
-        async get() { return {status: 200, body: {mystery: {secret: 'do-not-log'}}}; }
+        async get() {
+            return {
+                status: 200,
+                body: {mystery: {secret: 'do-not-log'}},
+                text: JSON.stringify({mystery: {secret: 'do-not-log-either'}})
+            };
+        }
     }];
     await dds.checkArchivedSourceEvidence();
     const line = logs.map(row => String(row[1])).find(value => value.includes('unsupported'));
     assert.equal(Boolean(line), true);
     assert.equal(line.includes('do-not-log'), false);
+    assert.equal(line.includes('do-not-log-either'), false);
+    assert.equal(line.includes('json=object[mystery]'), true);
 });
