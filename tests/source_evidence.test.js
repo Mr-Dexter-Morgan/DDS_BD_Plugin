@@ -158,6 +158,8 @@ test('audit response parser accepts current wrapper variants without weakening p
         {audit_log_entries: [auditEntry()]},
         {statusCode: 200, data: {auditLogEntries: [auditEntry()]}},
         {status: 200, body: JSON.stringify({audit_log_entries: [auditEntry()]})},
+        {status: 200, text: JSON.stringify({audit_log_entries: [auditEntry()]})},
+        {status: 200, xhr: {responseText: JSON.stringify({auditLogEntries: [auditEntry()]})}},
         {status: 200, body: {body: {audit_log_entries: [auditEntry()]}}},
         {status: 200, response: {result: {audit_log_entries: [auditEntry()]}}},
         {status: 200, body: {async json() { return {audit_log_entries: [auditEntry()]}; }}}

@@ -417,9 +417,19 @@ module.exports = class DDS {
                 }
             }
 
-            for (const key of ["body", "data", "response", "result", "payload"]) {
+            for (const key of ["body", "data", "text", "response", "responseText", "result", "payload"]) {
                 if (!(key in value)) continue;
                 const found = await inspect(value[key], `${shape}.${key}`, depth + 1);
+                if (found) return found;
+            }
+
+            // Discord's current REST wrapper may carry raw JSON only on xhr.responseText.
+            if (value.xhr && typeof value.xhr === "object") {
+                const found = await inspect(
+                    value.xhr.responseText,
+                    `${shape}.xhr.responseText`,
+                    depth + 1
+                );
                 if (found) return found;
             }
             return null;
