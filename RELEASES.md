@@ -28,12 +28,25 @@ This file is the authoritative status index for DDS BetterDiscord Plugin release
 | `0.5.1` | 2026-09-13 | **BROKEN** | Export-root hotfix; subsequent live testing showed BetterDiscord's fs polyfill lacked `openSync()`. |
 | `0.5.2` | 2026-09-13 | **VERIFIED / STABLE MILESTONE** | BetterDiscord-compatible Disk Export live verified on Windows. |
 | `0.5.3` | 2026-09-16 | **VERIFIED / LIVE TESTED** | `plugin-heartbeat-v1` live verified with Companion 0.4.4: RUNNING, periodic refresh, STOPPED, LIMITED, and automatic recovery. Capture semantics unchanged. |
+| `0.5.4` | 2026-10-22 | **VERIFIED / RELEASED / USER ACCEPTED** | `source-evidence-v1`: authenticated Discord RestAPI, exact CHANNEL_DELETE proof, Companion SOURCE_GONE terminal lifecycle live accepted. |
 
 ## Current recommended release
 
-**`0.5.3`**
+**`0.5.4`**
 
-Promoted on 2026-09-16 after live BetterDiscord + DDS Companion 0.4.4 validation.
+Promoted on 2026-10-22 after live BetterDiscord evidence validation and Companion 0.8.7 SOURCE_GONE user acceptance.
+
+Release: https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4
+
+## 0.5.4 validation summary
+
+- BetterDiscord resolved Discord's authenticated RestAPI rather than generic superagent.
+- Exact `CHANNEL_DELETE` audit evidence was matched for two archived GUILD_VOICE sources.
+- `source_evidence.json` sidecars were imported by Companion.
+- Companion 0.8.7 live gate confirmed `UNRESOLVED → SOURCE_GONE`, terminal retry blocking and cached-file priority.
+- Unrelated historical unresolved media remained unresolved without positive evidence.
+- GitHub Release asset SHA-256: `3add179053cfb7d1f9b11b4c2ebbf52f8236948fac4aab954479679e6559e87b`.
+- User approval: **LIVE TESTED / ACCEPTED / RELEASED**.
 
 ## 0.5.3 validation summary
 
