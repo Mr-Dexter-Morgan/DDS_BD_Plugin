@@ -139,15 +139,21 @@ test('missing Webpack HTTP adapter leaves UNKNOWN', async () => {
     modules = []; await dds.checkArchivedSourceEvidence(); assert.equal(fs.existsSync(evidencePath()), false);
 });
 
-test('relaxed native HTTP feature detection accepts delete instead of del', async () => {
-    modules = [{
+test('Discord RestAPI candidate is accepted while generic superagent is rejected', async () => {
+    const generic = {
+        get: noop, post: noop, put: noop, patch: noop, del: noop, delete: noop,
+        Request: function Request() {}, Response: function Response() {}
+    };
+    const rest = {
         post: noop,
-        delete: noop,
+        put: noop,
+        del: noop,
         async get(options) {
             requests.push(options);
             return {status: 200, body: {audit_log_entries: [auditEntry()]}};
         }
-    }];
+    };
+    modules = [generic, rest];
     await dds.checkArchivedSourceEvidence();
     assert.equal(JSON.parse(fs.readFileSync(evidencePath(), 'utf8')).availability, 'GONE_VERIFIED');
     assert.equal(requests.length, 1);

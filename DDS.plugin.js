@@ -321,12 +321,18 @@ module.exports = class DDS {
     }
 
     sourceEvidenceHttpCandidate(module) {
-        if (!module || typeof module.get !== "function") return false;
-        const verbs = ["post", "put", "patch", "del", "delete"]
-            .filter(name => typeof module?.[name] === "function");
-        // Avoid matching arbitrary objects with a get() method. Discord's REST wrapper
-        // has several mutation verbs, but the exact delete key has changed over time.
-        return verbs.length >= 2;
+        if (!module || typeof module !== "object") return false;
+        // Discord's authenticated RestAPI wrapper currently exposes del/put/get.
+        // Generic superagent also matches the verbs but exposes delete as an alias
+        // (and Request/Response helpers), so reject that transport explicitly.
+        if (typeof module.get !== "function" ||
+            typeof module.put !== "function" ||
+            typeof module.del !== "function") return false;
+        if (typeof module.delete === "function" ||
+            typeof module.Request === "function" ||
+            typeof module.Response === "function" ||
+            typeof module.agent === "function") return false;
+        return true;
     }
 
     resolveSourceEvidenceHttp() {
@@ -334,32 +340,22 @@ module.exports = class DDS {
             const candidates = [value, value?.default, value?.HTTP, value?.http, value?.api];
             return candidates.find(candidate => this.sourceEvidenceHttpCandidate(candidate)) || null;
         };
-        const filters = [
-            module => this.sourceEvidenceHttpCandidate(module) &&
-                ["post", "put", "patch"].every(name => typeof module?.[name] === "function") &&
-                (typeof module?.del === "function" || typeof module?.delete === "function"),
-            module => this.sourceEvidenceHttpCandidate(module) &&
-                typeof module?.post === "function",
-            module => this.sourceEvidenceHttpCandidate(module) ||
-                this.sourceEvidenceHttpCandidate(module?.default) ||
-                this.sourceEvidenceHttpCandidate(module?.HTTP) ||
-                this.sourceEvidenceHttpCandidate(module?.http) ||
-                this.sourceEvidenceHttpCandidate(module?.api)
-        ];
-        for (const filter of filters) {
-            try {
-                const found = BdApi.Webpack.getModule(filter, {searchExports: true});
-                const resolved = unwrap(found);
-                if (resolved) return resolved;
-            } catch {
-                // Try the next, slightly broader feature filter.
-            }
+        const filter = module =>
+            this.sourceEvidenceHttpCandidate(module) ||
+            this.sourceEvidenceHttpCandidate(module?.default) ||
+            this.sourceEvidenceHttpCandidate(module?.HTTP) ||
+            this.sourceEvidenceHttpCandidate(module?.http) ||
+            this.sourceEvidenceHttpCandidate(module?.api);
+        try {
+            const found = BdApi.Webpack.getModule(filter, {searchExports: true});
+            return unwrap(found);
+        } catch {
+            return null;
         }
-        return null;
     }
 
     sourceEvidenceHttpShape(http) {
-        return ["get", "post", "put", "patch", "del", "delete"]
+        return ["get", "post", "put", "patch", "del", "delete", "Request", "Response", "agent"]
             .filter(name => typeof http?.[name] === "function")
             .join(",") || "none";
     }
