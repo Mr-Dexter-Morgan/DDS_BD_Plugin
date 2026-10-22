@@ -381,7 +381,14 @@ module.exports = class DDS {
                         json = "invalid";
                     }
                 }
-                return `string(${value.length},json=${json})`;
+                const leadCodes = Array.from(value.slice(0, 12))
+                    .map(char => char.charCodeAt(0))
+                    .join(",");
+                const objectIndex = value.indexOf("{");
+                const arrayIndex = value.indexOf("[");
+                const candidates = [objectIndex, arrayIndex].filter(index => index >= 0);
+                const jsonStart = candidates.length ? Math.min(...candidates) : -1;
+                return `string(${value.length},json=${json},jsonStart=${jsonStart},leadCodes=[${leadCodes}])`;
             }
             if (typeof value !== "object") return typeof value;
             const keys = Object.keys(value).slice(0, 12);

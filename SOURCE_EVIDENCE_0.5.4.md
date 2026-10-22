@@ -100,3 +100,11 @@ If the audit response is still unsupported, diagnostics now report only data typ
 string lengths and parsed top-level JSON key names for response.text and
 xhr.responseText. Raw response values are never logged. Fetch-like text() is also
 accepted and parsed through the same bounded JSON path.
+
+
+### Prefix-only live diagnostics
+
+For unsupported string wrappers, diagnostics now expose only total length, the numeric
+character codes of at most the first 12 characters, and the first structural JSON
+marker offset. No response characters or audit values are logged. This is used only
+to identify transport prefixes safely.

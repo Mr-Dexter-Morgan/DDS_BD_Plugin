@@ -206,4 +206,6 @@ test('unsupported live response shape is reported without exposing response valu
     assert.equal(line.includes('do-not-log'), false);
     assert.equal(line.includes('do-not-log-either'), false);
     assert.equal(line.includes('json=object[mystery]'), true);
+    assert.equal(line.includes('leadCodes=['), true);
+    assert.equal(line.includes('jsonStart='), true);
 });
