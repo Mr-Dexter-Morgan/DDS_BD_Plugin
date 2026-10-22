@@ -1,13 +1,13 @@
-> Development candidate: **DDS Plugin 0.5.4**, linked to **Companion 0.8.6**.
-> Positive channel-deletion evidence only; live Discord adapter acceptance pending.
-> See [SOURCE_EVIDENCE_0.5.4.md](SOURCE_EVIDENCE_0.5.4.md). No public release made.
+> Current stable release: **DDS Plugin 0.5.4** — verified SOURCE_GONE evidence.
+> Live Discord evidence path and Companion terminal lifecycle were user-accepted on 2026-10-22.
+> See [SOURCE_EVIDENCE_0.5.4.md](SOURCE_EVIDENCE_0.5.4.md) and the [v0.5.4 release](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4).
 
 # DDS BetterDiscord Plugin
 
 > **DDS — Discord Data Snatcher**  
 > *Are you sure your data is secure?*
 
-[![Current version](https://img.shields.io/badge/version-0.5.3-7b7cff)](./RELEASES.md)
+[![Current version](https://img.shields.io/badge/version-0.5.4-7b7cff)](./RELEASES.md)
 [![Status](https://img.shields.io/badge/status-live%20tested-55d6a2)](./RELEASES.md)
 [![BetterDiscord](https://img.shields.io/badge/platform-BetterDiscord-5865F2)](https://betterdiscord.app/)
 [![Syntax check](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/actions/workflows/syntax-check.yml)
@@ -18,9 +18,9 @@ The plugin is intentionally lightweight. Storage, indexing, search, media cachin
 
 ## Current stable milestone
 
-**v0.5.3 — Plugin Heartbeat / truthful Companion health**
+**v0.5.4 — Verified SOURCE_GONE evidence + Plugin Heartbeat**
 
-This is the current recommended plugin release. It has been live-validated on Windows with Discord Desktop + BetterDiscord and DDS Companion 0.4.4.
+This is the current recommended plugin release. It has been live-validated on Windows with Discord Desktop + BetterDiscord and DDS Companion 0.8.7.
 
 Core capabilities:
 
@@ -34,7 +34,8 @@ Core capabilities:
 - metadata capture for attachments, embeds, and message references;
 - clean lifecycle and listener/timer cleanup;
 - graceful compatibility with BetterDiscord's reduced filesystem API;
-- local `plugin-heartbeat-v1` status for DDS Companion Health, including clean STOPPED state and automatic recovery.
+- local `plugin-heartbeat-v1` status for DDS Companion Health, including clean STOPPED state and automatic recovery;
+- verified `source-evidence-v1` for deleted archived Voice/Stage sources, based only on exact `CHANNEL_DELETE` audit-log proof.
 
 ## Quick installation
 
@@ -188,6 +189,7 @@ The plugin **does not**:
 | `0.5.1` | BROKEN | Runtime-path hotfix attempt |
 | `0.5.2` | VERIFIED / STABLE MILESTONE | BetterDiscord-compatible Disk Export |
 | `0.5.3` | VERIFIED / LIVE TESTED | Plugin Heartbeat / Companion Health contract |
+| `0.5.4` | VERIFIED / RELEASED / USER ACCEPTED | SOURCE_GONE evidence via authenticated Discord RestAPI + exact CHANNEL_DELETE proof |
 
 See [CHANGELOG.md](./CHANGELOG.md) for what changed and [RELEASES.md](./RELEASES.md) for validation status and historical failures.
 
