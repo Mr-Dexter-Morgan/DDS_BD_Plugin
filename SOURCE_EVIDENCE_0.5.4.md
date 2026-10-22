@@ -82,3 +82,13 @@ wrapper fields (body/data/response/result/payload), accepts JSON-string bodies a
 Fetch-like json() wrappers, and still publishes proof only after an exact
 CHANNEL_DELETE target match. Diagnostic logs expose only types/key names, never
 response values, headers, tokens, audit actors or reasons.
+
+
+### Confirmed current Discord response wrapper
+
+The live diagnostic returned HTTP 200 from the native Discord REST adapter with root
+keys including req/xhr/text/status/statusCode while body was null and data undefined.
+The audit JSON is therefore parsed from response.text; xhr.responseText is also
+accepted as the equivalent wrapper form. The parser still requires a valid JSON
+object containing audit_log_entries/auditLogEntries and the unchanged exact
+CHANNEL_DELETE target match before GONE_VERIFIED is written.
