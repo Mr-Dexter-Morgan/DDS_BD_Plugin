@@ -34,11 +34,18 @@ Twelve automated cases pass, covering positive voice/stage proof, all unknown ga
 request limits, cancellation, currently visible sources and subscription cleanup.
 Companion also imports actual JSON produced by this code in a cross-language check.
 
-LIVE DISCORD ADAPTER: NOT VERIFIED. The native Discord module/response shape requires
-one authorized Windows check. Audit logs require VIEW_AUDIT_LOG and retain 45 days;
-the first page may omit an older deletion. Missing proof deliberately leaves UNKNOWN.
-This candidate does not promise to classify the six historical attachments without
-positive evidence. Current status: PARTIAL / NEEDS FIX pending live acceptance.
+LIVE DISCORD ADAPTER: VERIFIED on Windows / Discord Stable on 2026-10-22.
+The Plugin resolved Discord's authenticated RestAPI, received HTTP 200 from the
+guild audit-log endpoint, matched exact CHANNEL_DELETE (12) entries for two archived
+GUILD_VOICE channels, and wrote bounded GONE_VERIFIED sidecars. Companion 0.8.6
+imported both sidecars into source_channel_evidence. One linked media object remained
+CACHED and one previously manually-cleared object remained EVICTED, confirming
+cached-file priority and no automatic retry resurrection.
+
+The separate live path for an uncached/expired attachment becoming terminal
+SOURCE_GONE and repeated Retry All was not exercised in this run; that remains a
+Companion-side live acceptance item. Missing proof still deliberately leaves UNKNOWN.
+Plugin 0.5.4 native evidence adapter status: LIVE PASS.
 
 Official protocol/API references:
 https://docs.discord.com/developers/resources/audit-log
@@ -120,3 +127,25 @@ RestAPI from an object exposing del + put and uses relative Discord Endpoints.
 The r1 resolver now rejects superagent-style candidates exposing delete aliases or
 Request/Response/agent helpers and accepts the Discord RestAPI-shaped object with
 get + put + del. The audit request contract itself remains unchanged.
+
+
+## Final live evidence
+
+Fresh test source:
+- guild: 737955779230826516
+- channel: 1562825560596684890
+- persisted channel type: GUILD_VOICE (2)
+- exact audit action: CHANNEL_DELETE (12)
+- audit entry: 1562826360324493343
+- observedAt: 2026-10-22T14:23:02.405Z
+- result: source_evidence.json written with GONE_VERIFIED
+
+Earlier disposable voice source 1562793598255104100 was also verified from its own
+CHANNEL_DELETE audit entry. Companion imported both evidence files immediately.
+
+Root cause of the original live failure:
+the broad feature filter selected generic superagent instead of Discord's
+authenticated RestAPI. The generic transport requested the ordinary Discord web
+route and returned HTML. The final resolver rejects superagent-specific delete /
+Request / Response / agent shapes and selects the Discord RestAPI object exposing
+get + put + del.
