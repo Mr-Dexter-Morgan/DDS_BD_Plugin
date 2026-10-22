@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.4] — 2026-10-22
+### Verified SOURCE_GONE evidence
+
+**Status: VERIFIED / RELEASED / USER ACCEPTED**
+
+- Added bounded `source-evidence-v1` generation for archived Discord Voice/Stage sources.
+- Requires positive guild audit-log `CHANNEL_DELETE` (12) evidence whose `target_id` exactly matches the archived channel.
+- Preserves fail-safe UNKNOWN behavior when proof is unavailable; ChannelStore absence alone is never deletion proof.
+- Fixed BetterDiscord Webpack adapter resolution to reject generic superagent and select Discord's authenticated RestAPI (`get + put + del`).
+- Added bounded response-wrapper parsing, including `response.text` / `xhr.responseText`, without logging tokens, headers, audit actors or reasons.
+- Writes `source_evidence.json` sidecars for Companion import while preserving capture schema v2 and heartbeat behavior.
+- Live Discord validation confirmed two deleted GUILD_VOICE sources and Companion import.
+- Companion 0.8.7 live acceptance confirmed terminal `SOURCE_GONE`, retry blocking, cached-file priority, and no false conversion of unrelated unresolved media.
+- Published stable GitHub Release: https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4
+- Validated `DDS.plugin.js` SHA-256: `3add179053cfb7d1f9b11b4c2ebbf52f8236948fac4aab954479679e6559e87b`.
+
 All notable DDS BetterDiscord Plugin releases are documented here.
 
 This repository was created after the first plugin milestones had already been developed and live-tested, so the early release history below was reconstructed from the project's authoritative release records and per-version changelogs.
