@@ -92,3 +92,11 @@ The audit JSON is therefore parsed from response.text; xhr.responseText is also
 accepted as the equivalent wrapper form. The parser still requires a valid JSON
 object containing audit_log_entries/auditLogEntries and the unchanged exact
 CHANNEL_DELETE target match before GONE_VERIFIED is written.
+
+
+### Safe wrapper-shape diagnostics
+
+If the audit response is still unsupported, diagnostics now report only data types,
+string lengths and parsed top-level JSON key names for response.text and
+xhr.responseText. Raw response values are never logged. Fetch-like text() is also
+accepted and parsed through the same bounded JSON path.

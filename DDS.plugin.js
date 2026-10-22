@@ -368,12 +368,32 @@ module.exports = class DDS {
         const describe = value => {
             if (value === null) return "null";
             if (value === undefined) return "undefined";
-            if (typeof value === "string") return `string(${value.length})`;
+            if (typeof value === "string") {
+                const trimmed = value.trim();
+                let json = "n/a";
+                if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (parsed && typeof parsed === "object") {
+                            json = `${Array.isArray(parsed) ? "array" : "object"}[${Object.keys(parsed).slice(0, 12).join(",")}]`;
+                        }
+                    } catch {
+                        json = "invalid";
+                    }
+                }
+                return `string(${value.length},json=${json})`;
+            }
             if (typeof value !== "object") return typeof value;
             const keys = Object.keys(value).slice(0, 12);
             return `${Array.isArray(value) ? "array" : "object"}[${keys.join(",")}]`;
         };
-        return `root=${describe(response)} body=${describe(response?.body)} data=${describe(response?.data)}`;
+        return [
+            `root=${describe(response)}`,
+            `body=${describe(response?.body)}`,
+            `data=${describe(response?.data)}`,
+            `text=${describe(response?.text)}`,
+            `xhr.responseText=${describe(response?.xhr?.responseText)}`
+        ].join(" ");
     }
 
     async parseSourceEvidenceAuditResponse(response) {
@@ -406,11 +426,20 @@ module.exports = class DDS {
                 null;
             if (entries) return {status: explicitStatus, entries, shape};
 
-            // Some current Discord wrappers expose a Fetch-like object.
+            // Some wrappers expose Fetch-like json()/text() accessors.
             if (typeof value.json === "function") {
                 try {
                     const parsed = await value.json();
                     const found = await inspect(parsed, `${shape}:json()`, depth + 1);
+                    if (found) return found;
+                } catch {
+                    // Fall through to text()/known wrapper fields.
+                }
+            }
+            if (typeof value.text === "function") {
+                try {
+                    const parsed = await value.text();
+                    const found = await inspect(parsed, `${shape}:text()`, depth + 1);
                     if (found) return found;
                 } catch {
                     // Fall through to known wrapper fields.
