@@ -1,7 +1,7 @@
-# DDS Plugin 0.5.4 — SOURCE_GONE evidence candidate
+# DDS Plugin 0.5.4 — SOURCE_GONE evidence
 
 Baseline 0.5.3: `88e763c47f17b3b52ed3f8d1103227aefc854009`.
-Linked owner of lifecycle: DDS Companion 0.8.6. Not publicly released.
+Linked owner of lifecycle: DDS Companion 0.8.7. Plugin 0.5.4 and Companion 0.8.7 are publicly released.
 
 The Plugin already exports channel.json with id/guildId/type and capture-v2.
 Neither an absent ChannelStore item nor an internal CHANNEL_DELETE dispatch is
@@ -42,10 +42,15 @@ imported both sidecars into source_channel_evidence. One linked media object rem
 CACHED and one previously manually-cleared object remained EVICTED, confirming
 cached-file priority and no automatic retry resurrection.
 
-The separate live path for an uncached/expired attachment becoming terminal
-SOURCE_GONE and repeated Retry All was not exercised in this run; that remains a
-Companion-side live acceptance item. Missing proof still deliberately leaves UNKNOWN.
-Plugin 0.5.4 native evidence adapter status: LIVE PASS.
+The Companion-side terminal path was subsequently exercised and user-accepted on
+2026-10-22: a controlled UNRESOLVED input linked to preserved GONE_VERIFIED evidence
+transitioned to SOURCE_GONE through Companion's normal lifecycle service. Manual retry
+and retry-once remained blocked, attempt_count did not increase, cached-file priority
+was preserved, and unrelated historical unresolved items stayed unresolved without
+positive proof. Missing proof still deliberately leaves UNKNOWN.
+
+Plugin 0.5.4 native evidence adapter status: LIVE PASS / RELEASED.
+Companion SOURCE_GONE integration status: LIVE PASS / USER ACCEPTED.
 
 Official protocol/API references:
 https://docs.discord.com/developers/resources/audit-log
@@ -149,3 +154,12 @@ authenticated RestAPI. The generic transport requested the ordinary Discord web
 route and returned HTML. The final resolver rejects superagent-specific delete /
 Request / Response / agent shapes and selects the Discord RestAPI object exposing
 get + put + del.
+
+
+## Final release state
+
+- Plugin release: https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4
+- Plugin tag commit: `b47f6eb4284573cb25a7859fe1f3c7280c23b2cf`
+- Released artifact SHA-256: `3add179053cfb7d1f9b11b4c2ebbf52f8236948fac4aab954479679e6559e87b`
+- Companion release: https://github.com/Mr-Dexter-Morgan/DDS_Companion/releases/tag/v0.8.7
+- Final status: **VERIFIED / RELEASED / USER ACCEPTED**
