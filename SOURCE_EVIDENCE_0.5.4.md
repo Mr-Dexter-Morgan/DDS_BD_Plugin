@@ -67,3 +67,18 @@ r1 keeps the positive-proof contract unchanged and adds:
 
 No absence-only inference was added. A matching CHANNEL_DELETE (12) audit entry for
 the exact archived channel remains mandatory.
+
+
+### r1 live result and r2 response compatibility
+
+Live r1 on the same deleted test voice channel found 3 archived candidates in 2 guilds.
+The Discord native HTTP adapter was found with get/post/put/patch/del/delete and both
+guild audit requests returned HTTP 200. The only failing boundary was response parsing:
+the current Discord client response shape did not expose audit_log_entries at the
+legacy body/data/root locations.
+
+r2 therefore makes response parsing asynchronous and bounded. It follows only known
+wrapper fields (body/data/response/result/payload), accepts JSON-string bodies and
+Fetch-like json() wrappers, and still publishes proof only after an exact
+CHANNEL_DELETE target match. Diagnostic logs expose only types/key names, never
+response values, headers, tokens, audit actors or reasons.

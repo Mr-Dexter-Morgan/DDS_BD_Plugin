@@ -364,25 +364,81 @@ module.exports = class DDS {
             .join(",") || "none";
     }
 
-    parseSourceEvidenceAuditResponse(response) {
+    sourceEvidenceShapeSummary(response) {
+        const describe = value => {
+            if (value === null) return "null";
+            if (value === undefined) return "undefined";
+            if (typeof value === "string") return `string(${value.length})`;
+            if (typeof value !== "object") return typeof value;
+            const keys = Object.keys(value).slice(0, 12);
+            return `${Array.isArray(value) ? "array" : "object"}[${keys.join(",")}]`;
+        };
+        return `root=${describe(response)} body=${describe(response?.body)} data=${describe(response?.data)}`;
+    }
+
+    async parseSourceEvidenceAuditResponse(response) {
         const explicitStatus =
             Number.isFinite(Number(response?.status)) ? Number(response.status) :
             Number.isFinite(Number(response?.statusCode)) ? Number(response.statusCode) :
             null;
-        const sources = [
+
+        const visited = new Set();
+        const inspect = async (value, shape, depth = 0) => {
+            if (value === null || value === undefined || depth > 4) return null;
+
+            if (typeof value === "string") {
+                const text = value.trim();
+                if (!text || (text[0] !== "{" && text[0] !== "[")) return null;
+                try {
+                    return await inspect(JSON.parse(text), `${shape}:json-string`, depth + 1);
+                } catch {
+                    return null;
+                }
+            }
+
+            if (typeof value !== "object" && typeof value !== "function") return null;
+            if (visited.has(value)) return null;
+            visited.add(value);
+
+            const entries =
+                Array.isArray(value.audit_log_entries) ? value.audit_log_entries :
+                Array.isArray(value.auditLogEntries) ? value.auditLogEntries :
+                null;
+            if (entries) return {status: explicitStatus, entries, shape};
+
+            // Some current Discord wrappers expose a Fetch-like object.
+            if (typeof value.json === "function") {
+                try {
+                    const parsed = await value.json();
+                    const found = await inspect(parsed, `${shape}:json()`, depth + 1);
+                    if (found) return found;
+                } catch {
+                    // Fall through to known wrapper fields.
+                }
+            }
+
+            for (const key of ["body", "data", "response", "result", "payload"]) {
+                if (!(key in value)) continue;
+                const found = await inspect(value[key], `${shape}.${key}`, depth + 1);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        for (const [shape, value] of [
             ["body", response?.body],
             ["data", response?.data],
             ["root", response]
-        ];
-        for (const [shape, body] of sources) {
-            if (!body || typeof body !== "object") continue;
-            const entries =
-                Array.isArray(body.audit_log_entries) ? body.audit_log_entries :
-                Array.isArray(body.auditLogEntries) ? body.auditLogEntries :
-                null;
-            if (entries) return {status: explicitStatus, entries, shape};
+        ]) {
+            const found = await inspect(value, shape);
+            if (found) return found;
         }
-        return {status: explicitStatus, entries: null, shape: "unsupported"};
+
+        return {
+            status: explicitStatus,
+            entries: null,
+            shape: `unsupported (${this.sourceEvidenceShapeSummary(response)})`
+        };
     }
 
     async checkArchivedSourceEvidence(generation = this.sourceEvidenceGeneration) {
@@ -422,7 +478,7 @@ module.exports = class DDS {
                     query: {action_type: SOURCE_AUDIT_EVENTS.CHANNEL_DELETE, limit: 100}, retries: 0});
                 if (!this.started || generation !== this.sourceEvidenceGeneration) return;
 
-                const parsed = this.parseSourceEvidenceAuditResponse(response);
+                const parsed = await this.parseSourceEvidenceAuditResponse(response);
                 this.api.Logger.info(
                     `Source evidence ${guildId}: audit response status=${parsed.status ?? "n/a"}, shape=${parsed.shape}, entries=${parsed.entries?.length ?? "n/a"}.`
                 );
