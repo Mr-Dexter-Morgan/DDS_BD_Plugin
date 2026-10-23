@@ -1,127 +1,80 @@
-# DDS BetterDiscord Plugin — Architecture
+# DDS Plugin Architecture
 
-## Role in DDS
+## DDS component model
 
-DDS is split into components on purpose. The BetterDiscord plugin is the Discord-facing adapter, not the whole application.
+DDS is one product split into three independently versioned components:
+
+| Component | Responsibility |
+|---|---|
+| **DDS Plugin** | Capture data that the running Discord client has actually loaded |
+| **DDS Companion** | Durable archive, media lifecycle/cache, Library, ZIP export, desktop UI |
+| **DDS Installer** | Windows installation, repair and component integration |
+
+Primary data path:
 
 ```text
-Discord Desktop
-      ↓
-BetterDiscord
-      ↓
-DDS Plugin
-      ↓
-DDS_Data / JSON
-      ↓
-DDS Companion
-      ↓
-SQLite / media / search / sync / UI
+Discord Desktop → BetterDiscord → DDS Plugin → DDS_Data → DDS Companion → SQLite archive
 ```
 
-The plugin owns only the responsibilities that require direct access to the running Discord client.
+DDS Installer sits beside this data path as the setup/repair control plane. It must not own or rewrite the user's archive.
 
 ## Plugin responsibilities
 
-### Context awareness
+### Client context
 
-DDS resolves the current Discord context using BetterDiscord-accessible stores and route information:
+The plugin resolves the current account, guild, selected channel, effective message channel and forum/thread context through BetterDiscord-accessible Discord stores and route state.
 
-- current account;
-- current guild/server;
-- selected channel;
-- effective message channel;
-- forum/thread context;
-- parent forum/channel metadata.
+### Message capture
 
-### Message visibility
+The plugin reads messages already present in Discord's client-side `MessageStore`. It does not independently crawl hidden history or bypass Discord permissions.
 
-DDS reads messages already present in Discord's local `MessageStore` for the active context.
+Current capture schema: **v2**.
 
-The plugin does not perform its own hidden-history fetch or impersonate the user to retrieve additional message history. If Discord has not loaded a message into the client context, the plugin does not independently fetch it.
+### Local export
 
-### Structured Capture
-
-Loaded Discord objects are converted into plain JSON-compatible data. Current capture schema version: **2**.
-
-A capture contains context metadata plus normalized message data such as:
-
-- message IDs;
-- author metadata;
-- content;
-- timestamps / edited timestamps;
-- pinned/TTS flags;
-- attachment metadata;
-- embed metadata;
-- message-reference metadata.
-
-### Disk Export
-
-The current verified release exports structured captures into an ID-addressed local directory tree under `DDS_Data`.
-
-The storage layer deliberately uses Discord numeric IDs in paths and keeps human-readable names in JSON metadata. This avoids path churn when servers/channels/threads are renamed.
-
-### Lifecycle
-
-The plugin maintains an explicit cleanup model:
-
-- listeners are registered centrally;
-- timers are cleared during stop;
-- pending exports are flushed where safe;
-- BetterDiscord patches are removed during stop;
-- store references and transient state are reset.
-
-## Thread Awareness
-
-Forum-thread navigation is a special case in Discord. During live testing, `SelectedChannelStore` remained pointed at the parent forum while thread messages were stored under the thread ID.
-
-DDS therefore combines selected-store context with the active route. For routes shaped like:
+The plugin exports JSON-compatible captures under:
 
 ```text
-/channels/<guild>/<parent>/threads/<thread>
+%APPDATA%\BetterDiscord\DDS_Data
 ```
 
-DDS treats `<thread>` as the effective message channel and preserves `<parent>` as parent metadata.
+Filesystem paths are based on stable Discord numeric IDs. Human-readable names remain metadata.
 
-## Storage boundary
+### Health contract
 
-The plugin writes local JSON snapshots. It does **not** own the long-term normalized archive.
+`plugin_heartbeat.json` implements `plugin-heartbeat-v1` so Companion can distinguish an active plugin from stale DDS_Data.
 
-DDS Companion is responsible for:
+### SOURCE_GONE evidence
 
-- accumulating history across snapshots;
-- SQLite storage;
-- deduplication across imports;
-- media caching;
-- full-text search;
-- activity and health reporting;
-- external sync;
-- desktop UI;
-- backups and productization concerns.
+Plugin 0.5.4 adds `source-evidence-v1`.
 
-## Reliability principles
+For archived Voice/Stage sources, DDS requires **positive deletion proof**. ChannelStore absence alone is never enough. The plugin performs a bounded authenticated Discord audit-log request and accepts only exact `CHANNEL_DELETE` evidence whose target ID matches the archived source. When proof is unavailable, the result stays UNKNOWN.
 
-The plugin follows two project-wide rules.
+No Discord credential is written to DDS_Data.
 
-### 1. Small failures must stay small
+## Companion boundary
 
-A single malformed object, unavailable optional API, failed write, or cleanup problem should be isolated as much as possible instead of collapsing the entire DDS pipeline.
+DDS Companion owns:
 
-### 2. Runtime assumptions must be verified
+- accumulation/deduplication across captures;
+- SQLite storage and migrations;
+- media download/cache/re-cache lifecycle;
+- SOURCE_GONE terminal lifecycle after imported positive evidence;
+- Library, Activity, Health and Settings UI;
+- ZIP export;
+- application update/rollback.
 
-BetterDiscord's renderer environment is not identical to a full Node.js process. Releases `0.5.0` and `0.5.1` are intentionally preserved as examples of why runtime capabilities must be tested instead of assumed.
+## Installer boundary
 
-The stable `0.5.2` Disk Export targets the smaller filesystem surface actually exposed by BetterDiscord.
+DDS Installer may install or repair Discord/BetterDiscord/DDS Plugin/DDS Companion, but it must preserve:
 
-## Security and privacy boundary
+- `%APPDATA%\BetterDiscord\DDS_Data`;
+- `%LOCALAPPDATA%\DDS_Companion`;
+- the Companion SQLite archive and user settings unless explicit data removal is requested.
 
-The plugin is local-first by design. It does not intentionally:
+## Reliability rules
 
-- extract authentication tokens;
-- collect passwords or credentials;
-- bypass Discord permissions;
-- fetch inaccessible history;
-- transmit captures to external services;
-- download binary media;
-- perform Google Drive sync.
-
-See [SECURITY.md](../SECURITY.md) for reporting security issues.
+- Small failures stay isolated.
+- Optional evidence/heartbeat failure must not collapse ordinary capture.
+- BetterDiscord runtime assumptions must be validated in the actual client environment.
+- Capture/storage/health contract changes require automated checks and live validation before stable promotion.

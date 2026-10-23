@@ -1,69 +1,52 @@
 # DDS Plugin Heartbeat Contract — v1
 
-Status: **candidate contract for DDS Plugin 0.5.3 / DDS Companion 0.4.4**
+Status: **stable contract**  
+Current producer: **DDS Plugin 0.5.4**  
+Current Companion baseline: **DDS Companion 0.8.8**
 
-The heartbeat exists only so DDS Companion can distinguish these states without guessing from message traffic:
-
-- plugin is enabled and alive;
-- plugin was cleanly disabled;
-- plugin/Discord disappeared without a clean shutdown;
-- DDS_Data exists but its producer is no longer active.
-
-The heartbeat does **not** change capture semantics and does not add any network activity.
+The heartbeat lets Companion distinguish an active Plugin from stale DDS_Data without guessing from message traffic.
 
 ## Location
 
 ```text
-DDS_Data/plugin_heartbeat.json
+%APPDATA%\BetterDiscord\DDS_Data\plugin_heartbeat.json
 ```
 
-`manifest.json` advertises:
+## Payload
 
-```json
-{
-  "capabilities": ["plugin-heartbeat-v1"],
-  "pluginHeartbeat": {
-    "schemaVersion": 1,
-    "file": "plugin_heartbeat.json",
-    "intervalMs": 30000
-  }
-}
-```
-
-## Heartbeat payload
+Representative schema:
 
 ```json
 {
   "schemaVersion": 1,
   "plugin": "DDS",
-  "pluginVersion": "0.5.3",
+  "pluginVersion": "0.5.4",
   "state": "RUNNING",
-  "updatedAt": "2026-09-16T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z",
   "heartbeatIntervalMs": 30000,
   "captureSchemaVersion": 2
 }
 ```
 
-Required semantics:
+## Semantics
 
-- On successful startup, write `RUNNING` immediately.
-- While enabled, refresh `RUNNING` every 30 seconds.
-- On clean BetterDiscord `stop()`, cancel the timer and write `STOPPED` once.
-- Failure to refresh heartbeat must never abort Structured Capture or Disk Export.
-- Repeated heartbeat-write failures should not spam logs.
+- successful plugin startup writes `RUNNING` immediately;
+- while enabled, `RUNNING` refreshes every 30 seconds;
+- a clean BetterDiscord stop writes `STOPPED`;
+- heartbeat write failure must not stop normal capture/export;
+- repeated heartbeat errors are throttled.
 
 ## Companion interpretation
 
-DDS Companion 0.4.4 uses the advertised interval with conservative minimum thresholds:
+DDS Companion uses heartbeat age and explicit state to classify Plugin health:
 
-- fresh `RUNNING` -> `RUNNING`;
-- explicit `STOPPED` -> `NOT RUNNING`;
-- old heartbeat -> `STALE`, then `NOT RUNNING` if it ages further;
-- heartbeat-capable plugin with missing/invalid heartbeat -> `LIMITED`;
-- older stable plugin without this capability -> `UPDATE AVAILABLE`, not a false failure.
+- fresh `RUNNING` → Plugin RUNNING;
+- explicit `STOPPED` → Plugin NOT RUNNING;
+- old heartbeat → STALE and later NOT RUNNING according to Companion thresholds;
+- missing/invalid heartbeat from a heartbeat-capable plugin → degraded/LIMITED health, not archive corruption.
 
-The local archive remains usable when the plugin is unavailable. Overall Health may become `LIMITED`, but this state is not equivalent to a Companion application error.
+Discord process detection is a separate Companion health signal. The local archive remains readable even when Discord or Plugin is unavailable.
 
-## Release discipline
+## Boundary
 
-This contract is not considered stable merely because it builds. Plugin 0.5.3 must pass live BetterDiscord enable/disable/re-enable testing together with Companion 0.4.4 before merge/release promotion.
+Heartbeat is local status metadata only. It adds no external telemetry and carries no Discord credential.

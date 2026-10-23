@@ -1,28 +1,23 @@
-# DDS Capture and Storage Format
+# DDS Plugin Capture and Storage Format
 
-This document describes the current BetterDiscord Plugin output boundary used by DDS Companion.
+Current stable plugin: **0.5.4**  
+Capture schema: **2**  
+Storage schema: **1**
 
-## Versions
-
-Current verified plugin: **0.5.2**  
-Capture schema version: **2**  
-Storage schema version: **1**
+This is the local hand-off contract from DDS Plugin to DDS Companion.
 
 ## Storage root
-
-Verified Windows root:
 
 ```text
 %APPDATA%\BetterDiscord\DDS_Data
 ```
 
-DDS prefers the BetterDiscord plugins path as the runtime anchor and creates `DDS_Data` beside the `plugins` directory.
-
-## Directory layout
+## Layout
 
 ```text
 DDS_Data/
 ├── manifest.json
+├── plugin_heartbeat.json
 └── guilds/
     └── <guildId>/
         ├── guild.json
@@ -30,58 +25,32 @@ DDS_Data/
             └── <channelId>/
                 ├── channel.json
                 ├── capture.json
+                ├── source_evidence.json   # when bounded source evidence is written
                 └── threads/
                     └── <threadId>/
                         └── capture.json
 ```
 
-All path IDs are validated Discord numeric IDs. Human-readable names are metadata only.
+Not every source has a `source_evidence.json`; absence of that file is not deletion proof.
 
-## `manifest.json`
+## manifest.json
 
-The manifest describes the storage contract and the most recent successful export context. Current fields include:
+The manifest advertises the local storage/capture contract and capabilities. Relevant values include:
 
-```text
-storageSchemaVersion
-captureSchemaVersion
-ddsVersion
-format
-layout
-mediaPolicy
-rootStructure
-lastExport
-```
+- `storageSchemaVersion`;
+- `captureSchemaVersion`;
+- plugin/DDS version;
+- `dds-json` format;
+- ID-addressed layout;
+- metadata-only media policy;
+- `plugin-heartbeat-v1`;
+- `source-evidence-v1` when supported.
 
-The current format identifier is `dds-json`, layout is `id-addressed`, and media policy is `metadata-only`.
+## capture.json
 
-## `guild.json`
+A capture is a JSON-compatible snapshot of messages already loaded by Discord for one active context.
 
-Contains stable guild metadata:
-
-```json
-{
-  "id": "<guildId>",
-  "name": "<human-readable guild name or null>"
-}
-```
-
-## `channel.json`
-
-Contains the stable parent/channel metadata required to interpret captures. The exact source can differ between ordinary channels and thread contexts, but the record preserves:
-
-```text
-id
-name
-type
-guildId
-parentId
-```
-
-## `capture.json`
-
-A capture is a current JSON-compatible snapshot of messages already loaded by Discord for one active context.
-
-Top-level data includes:
+Typical top-level fields include:
 
 ```text
 schemaVersion
@@ -101,163 +70,38 @@ newestMessageId
 messages
 ```
 
-### Source
+Message records can include IDs, author metadata, content, timestamps, attachment/embed metadata and message references.
 
-The source identifies Discord's client-side MessageStore as the origin and marks the capture as local-only. It can also indicate whether Discord reported the target collection as loading.
+Attachment URLs are metadata. DDS Plugin does **not** download the binary attachment.
 
-### Account
+## Threads
 
-When available:
-
-```text
-id
-username
-globalName
-```
-
-### Guild
-
-When available:
+For routes shaped like:
 
 ```text
-id
-name
+/channels/<guild>/<parent>/threads/<thread>
 ```
 
-### Channel
+DDS keeps the parent channel as metadata but uses the thread ID as the effective message context.
+
+## plugin_heartbeat.json
+
+Heartbeat schema v1 is documented in [PLUGIN_HEARTBEAT.md](PLUGIN_HEARTBEAT.md).
+
+## source_evidence.json
+
+Plugin 0.5.4 can write bounded `source-evidence-v1` sidecars for archived Voice/Stage sources.
+
+A positive evidence record is accepted only when an exact Discord audit-log `CHANNEL_DELETE` event matches the source channel ID. Missing/invalid/unavailable evidence remains non-terminal; Companion must not infer deletion from source absence alone.
+
+## Durable archive boundary
+
+`DDS_Data` is the Plugin→Companion capture hand-off, not the durable normalized archive.
+
+DDS Companion imports this data into its local SQLite archive under:
 
 ```text
-id
-name
-type
-guildId
-parentId
+%LOCALAPPDATA%\DDS_Companion
 ```
 
-### Thread
-
-For forum/thread contexts, schema v2 preserves:
-
-```text
-id
-name
-parentChannelId
-parentChannelName
-parentChannelType
-```
-
-For an ordinary channel, `thread` is null.
-
-### Route
-
-Thread Awareness keeps navigation diagnostics:
-
-```text
-path
-selectedChannelId
-effectiveChannelId
-```
-
-This distinction matters because Discord can keep the selected channel pointed at a parent forum while the effective message collection belongs to the opened thread.
-
-## Message object
-
-Each normalized message can contain:
-
-```text
-id
-channelId
-guildId
-type
-timestamp
-editedTimestamp
-author
-content
-pinned
-tts
-attachments
-embeds
-messageReference
-```
-
-### Author
-
-```text
-id
-username
-globalName
-displayName
-bot
-```
-
-### Attachments
-
-Attachment metadata can include:
-
-```text
-id
-filename
-title
-description
-contentType
-size
-url
-proxyUrl
-width
-height
-ephemeral
-```
-
-DDS Plugin does not download the referenced binary attachment.
-
-### Embeds
-
-Embed metadata can include:
-
-```text
-type
-url
-title
-description
-timestamp
-color
-provider
-author
-thumbnail
-image
-fields
-footer
-```
-
-### Message reference
-
-When present:
-
-```text
-messageId
-channelId
-guildId
-```
-
-## Snapshot semantics
-
-The plugin maintains the **current** capture for a channel/thread context and overwrites that current JSON snapshot when Discord's loaded state changes.
-
-DDS Companion is responsible for accumulating multiple observations into a durable historical archive. The plugin itself is not the long-term history database.
-
-## Media policy
-
-Current policy: **metadata-only**.
-
-DDS Plugin records attachment/embed metadata and URLs but does not download binary media. Future media caching belongs to DDS Companion.
-
-## Compatibility rules
-
-Consumers should:
-
-1. treat unknown additive fields as forward-compatible;
-2. inspect `schemaVersion` before relying on schema-specific fields;
-3. use Discord IDs as stable entity keys;
-4. avoid treating names as path identifiers;
-5. never infer message deletion merely because a later current snapshot contains fewer loaded messages;
-6. preserve already-imported archive data when a source capture disappears or changes.
+The SQLite archive is the durable source of truth; media cache and ZIP exports are derived layers.
