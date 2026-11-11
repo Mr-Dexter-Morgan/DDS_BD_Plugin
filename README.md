@@ -1,157 +1,104 @@
-# DDS Plugin — Discord Data Snatcher
+# DDS Plugin — сбор данных Discord для личного архива
 
-**Current stable:** **DDS Plugin 0.5.4** · BetterDiscord · Windows live-validated.
+**Актуальная версия: 0.5.4 (стабильная).** Работает как плагин BetterDiscord в настольном приложении Discord для Windows.
 
-DDS Plugin is the thin Discord-facing capture layer of the DDS project. It reads only the context already available to the signed-in Discord client, writes structured local capture data into `DDS_Data`, and leaves archive/media/UI responsibilities to DDS Companion.
+**DDS Plugin** — первая часть системы Discord Data Snatcher (DDS). Он получает сведения, уже доступные запущенному клиенту Discord, и сохраняет их в локальные файлы. Затем эти данные может обработать DDS Companion: сформировать долговременный архив, сохранить нужные вложения и показать историю в отдельной программе.
 
-## DDS components
+Плагин не является самостоятельным архиватором и не заменяет Discord. Его задача — аккуратно передать данные из клиента в DDS, не смешивая сбор информации с хранением архива.
 
-| Component | Current public version | Role |
+## Из чего состоит DDS
+
+| Компонент | Актуальная опубликованная версия | Для чего нужен |
 |---|---|---|
-| **DDS Plugin** | **0.5.4 Stable** | Discord/BetterDiscord capture layer |
-| **DDS Companion** | **0.8.8 Stable** | SQLite archive, Library, media lifecycle/cache, ZIP export, desktop UI |
-| **DDS Installer** | **v0.9.0-rc.1 Preview** | Windows install/repair orchestration |
+| [DDS Plugin](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin) | 0.5.4, стабильная | Считывает доступные данные из работающего Discord через BetterDiscord и сохраняет их локально |
+| [DDS Companion](https://github.com/Mr-Dexter-Morgan/DDS_Companion) | 0.8.8, стабильная | Ведёт архив SQLite, управляет медиафайлами и предоставляет настольный интерфейс |
+| [DDS Installer](https://github.com/Mr-Dexter-Morgan/DDS_Installer) | 0.9.0, стабильная | Устанавливает компоненты и помогает восстановить их работоспособность |
 
-Repositories:
+**Версии у трёх компонентов независимые:** номер плагина не обязан совпадать с номером Companion или Installer.
 
-- Plugin: https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin
-- Companion: https://github.com/Mr-Dexter-Morgan/DDS_Companion
-- Installer: https://github.com/Mr-Dexter-Morgan/DDS_Installer
-
-The three components use **independent version numbers**.
-
-## Data flow
+## Как работает система
 
 ```text
-Discord Desktop
-      ↓
+Настольный Discord
+       ↓
 BetterDiscord
-      ↓
-DDS Plugin
-      ↓
-%APPDATA%\BetterDiscord\DDS_Data
-      ↓
-DDS Companion
-      ↓
-SQLite archive → media cache / ZIP export
+       ↓
+DDS Plugin → %APPDATA%\BetterDiscord\DDS_Data
+       ↓
+DDS Companion → архив SQLite, медиакеш, экспорт ZIP
 ```
 
-DDS Installer is the setup/repair control plane around those components; it does not own the user archive.
+DDS Installer устанавливает или восстанавливает компоненты, но не управляет содержимым пользовательского архива.
 
-## Install
+## Установка
 
-Recommended path: use **DDS Installer** when appropriate.
+Самый простой способ — воспользоваться [DDS Installer](https://github.com/Mr-Dexter-Morgan/DDS_Installer/releases). Плагин можно установить и вручную:
 
-Manual plugin installation:
+1. Установи настольный Discord и BetterDiscord.
+2. Скачай файл `DDS.plugin.js` из [релиза 0.5.4](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4).
+3. В Discord открой **Настройки → BetterDiscord → Плагины → Открыть папку плагинов**. Названия пунктов могут отличаться в зависимости от языка интерфейса.
+4. Скопируй `DDS.plugin.js` в открывшуюся папку.
+5. Вернись в настройки BetterDiscord и включи плагин DDS.
 
-1. Install Discord Desktop and BetterDiscord.
-2. Download `DDS.plugin.js` from the [v0.5.4 release](https://github.com/Mr-Dexter-Morgan/DDS_BD_Plugin/releases/tag/v0.5.4).
-3. Open **Discord → Settings → BetterDiscord → Plugins → Open Plugins Folder**.
-4. Copy `DDS.plugin.js` into that folder.
-5. Enable **DDS**.
-
-Plugin data is stored locally at:
+Собранные данные сохраняются **на этом же компьютере**, в каталоге:
 
 ```text
 %APPDATA%\BetterDiscord\DDS_Data
 ```
 
-## What the Plugin owns
+## Какие данные обрабатывает плагин
 
-- current account/guild/channel/thread context;
-- messages already loaded in Discord's client-side MessageStore;
-- structured capture schema v2;
-- local ID-addressed JSON export;
-- `plugin-heartbeat-v1` for Companion Health;
-- bounded `source-evidence-v1` for positive Voice/Stage deletion evidence.
+- Сведения о текущей учётной записи, серверах, каналах и ветках, доступные внутри работающего клиента.
+- Сообщения, которые Discord уже загрузил в свою память: плагин не обещает выгрузить всю историю сервера.
+- Структурированные записи в формате DDS v2, включая локальный экспорт JSON с привязкой к идентификаторам объектов.
+- Служебные сигналы `plugin-heartbeat-v1`, по которым Companion понимает, что плагин работает.
+- Ограниченные подтверждения удаления голосовых каналов и Stage-каналов в формате `source-evidence-v1`, когда такие подтверждения действительно доступны.
 
-For SOURCE_GONE evidence the plugin may use Discord's authenticated internal RestAPI only for the bounded audit-log proof required by that contract. It does not export credentials or captures to an external service.
+Для отдельного подтверждения удаления плагин может обращаться к внутреннему API Discord от имени уже вошедшего пользователя — только в пределах этой проверки.
 
-## What the Plugin does not own
+## Чего плагин не делает
 
-- the long-term SQLite archive;
-- media downloading/caching;
-- Library/Health/desktop UI;
-- ZIP export;
-- Companion updater;
-- installation/repair orchestration.
+**Не отвечает** за базу данных SQLite, долговременное хранение истории, загрузку и кеширование вложений, настольный интерфейс, ZIP-экспорт, обновление Companion и установку DDS. Эти задачи выполняют другие компоненты системы.
 
-Those belong to DDS Companion or DDS Installer.
+Плагин не предназначен для обхода прав доступа Discord, выгрузки недоступной истории или сбора паролей и токенов. Архивные данные он записывает локально и не предназначен для их отправки посторонним сервисам.
 
-## Privacy boundary
+## Проверка и разработка
 
-DDS Plugin does not intentionally:
+Плагин написан на JavaScript и не требует отдельной сборки: готовый файл — `DDS.plugin.js`.
 
-- extract Discord passwords or authentication tokens;
-- bypass Discord permissions;
-- fetch inaccessible message history;
-- transmit captured archive data to third-party services;
-- download binary attachment media.
+Для проверки синтаксиса и тестов используется Node.js:
 
-It observes the running client and writes local DDS data for the same user.
-
-## Development / validation
-
-There is no build step for the plugin itself. The release artifact is `DDS.plugin.js`.
-
-Every push and pull request runs:
-
-```text
+```bash
 node --check DDS.plugin.js
 node --test tests/source_evidence.test.js
 ```
 
-Current release notes: [docs/releases/RELEASE_NOTES_0.5.4.md](docs/releases/RELEASE_NOTES_0.5.4.md)
+Эти проверки также запускаются в GitHub при изменениях кода и создании запросов на слияние.
 
-Active contracts:
+Полезные документы:
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Capture / storage format](docs/DATA_FORMAT.md)
-- [Plugin heartbeat](docs/PLUGIN_HEARTBEAT.md)
-- [Security](SECURITY.md)
+- [Архитектура](docs/ARCHITECTURE.md) — устройство плагина и границы ответственности.
+- [Формат данных](docs/DATA_FORMAT.md) — что и как сохраняется.
+- [Контрольный сигнал плагина](docs/PLUGIN_HEARTBEAT.md) — как Companion отслеживает его работу.
+- [Безопасность](SECURITY.md) — ограничения и принципы обработки данных.
+- [Изменения версии 0.5.4](docs/releases/RELEASE_NOTES_0.5.4.md).
 
-## Repository layout
+## Основные файлы
 
 ```text
-DDS.plugin.js
-tests/
-docs/
-  ARCHITECTURE.md
-  DATA_FORMAT.md
-  PLUGIN_HEARTBEAT.md
-  releases/RELEASE_NOTES_0.5.4.md
-.github/workflows/syntax-check.yml
-README.md
-SECURITY.md
+DDS.plugin.js                    сам плагин
+tests/                           автоматические проверки
+docs/                            техническая документация
+.github/workflows/               проверки GitHub
+SECURITY.md                      политика безопасности
+LICENSE.md                       условия использования исходного кода
 ```
 
-## Contributors
+## Лицензия
 
-<table>
-  <tr>
-    <td align="center" width="220">
-      <a href="https://github.com/Mr-Dexter-Morgan">
-        <img src="https://avatars.githubusercontent.com/u/306070326?v=4" width="96" height="96" alt="Mr-Dexter-Morgan" />
-        <br />
-        <strong>Mr-Dexter-Morgan</strong>
-      </a>
-      <br />
-      <sub>Creator &amp; maintainer</sub>
-    </td>
-    <td align="center" width="220">
-      <a href="https://chatgpt.com/">
-        <img src="https://github.com/openai.png?size=96" width="96" height="96" alt="ChatGPT" />
-        <br />
-        <strong>ChatGPT</strong>
-      </a>
-      <br />
-      <sub>AI development collaborator</sub>
-    </td>
-  </tr>
-</table>
+Исходный код проекта предоставляется на условиях [PolyForm Noncommercial 1.0.0](LICENSE.md). **Для некоммерческих целей** разрешено пользоваться программой, изучать и изменять исходники, создавать собственные версии и делиться ими, соблюдая требования лицензии об уведомлениях.
 
-<sub>ChatGPT is credited for AI-assisted development; this does not imply official involvement or endorsement by OpenAI.</sub>
+**Коммерческое использование** (не только продажа копий, но и применение в коммерческом продукте или услуге) не разрешено без отдельного согласия правообладателя. Это лицензия с доступным исходным кодом, **но не лицензия открытого ПО в смысле OSI**, поскольку она ограничивает коммерческое применение.
 
-## License
+У сторонних компонентов и зависимостей могут быть собственные условия лицензирования. Подробные юридические условия приведены в [LICENSE.md](LICENSE.md); это описание служит только пояснением.
 
-No separate open-source license has been granted. Public repository visibility alone does not grant general redistribution rights.
